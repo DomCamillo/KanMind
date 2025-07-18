@@ -1,0 +1,11 @@
+# 🐍 Virtuelle Umgebung
+env/
+ENV/
+.venv/
+venv/
+
+# 💡 Python Bytecode-Dateien
+__pycache__/
+*.py[cod]
+*$py.class
+
