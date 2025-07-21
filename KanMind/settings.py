@@ -39,8 +39,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'Kan_Mind_app',
     'rest_framework',
-    'rest_framework.authtoken',
-    'user_auth_app'
+
+
 ]
 
 MIDDLEWARE = [

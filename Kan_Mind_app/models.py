@@ -31,8 +31,8 @@ class BoardUser(models.Model):
 
 
 class Column (models.Model):
-    baord = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='columns')
-    title = models.CharField(max_length=255)
+    board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='columns')
+    title = models.CharField(max_length=100)
     position = models.PositiveBigIntegerField(default=0)
 
     def __str__(self):
@@ -48,6 +48,7 @@ class Task (models.Model):
     position = models.PositiveBigIntegerField(default=0)
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='assigned_tasks', null=True, blank=True)
     due_date = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     urgency = models.CharField(max_length=15)
 
     def __str__(self):
