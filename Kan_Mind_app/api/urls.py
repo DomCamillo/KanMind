@@ -1,18 +1,24 @@
 from django.contrib import admin
-from django.urls import path ,include
-from .views import  BoardUserView, BoardUserDetailView ,TaskView ,TaskDetailView, BaordView, BoardDetailView, ColumnView, ColumnDetailView,CommentView, CommentDetailView
+from django.urls import path
 
+from .views import (TaskViewSet, TasksAssignedToMeView, TasksReviewerView,
+    BoardViewSet,
+    RegistrationView, LoginView,
+    EmailCheckView
+)
 urlpatterns = [
 
-   path('tasks/', TaskView.as_view(), name='Task-list'),
-   path('tasks/<int:pk>', TaskDetailView.as_view(), name='TaskDetail-list'),
-   path('board/', BaordView.as_view(), name='Board-list'),
-   path('board/<int:pk>', BoardDetailView.as_view(), name='BoardDetail-list'),
-   path('user/', BoardUserView.as_view(), name='User-list'),
-   path('user/<int:pk>', BoardUserDetailView.as_view(), name='UserDetail-list'),
-   path('comment/', CommentView.as_view(), name='Comment-list'),
-   path('comment/<int:pk>', CommentDetailView.as_view(), name='CommentDetail-list'),
-   path('column/', ColumnView.as_view(), name='Column-list'),
-   path('column/<int:pk>', ColumnDetailView.as_view(), name='ColumnDetail-list'),
+    #Login_Registration
+    path('login/', LoginView.as_view(), name='login'),
+    path('registration/', RegistrationView.as_view(), name='register'),
+    path('email-check/', EmailCheckView.as_view(), name='email-check'),
+   # Board
+    path('boards/', BoardViewSet.as_view({'get': 'list', 'post': 'create'}), name='board-list'),
+    path('boards/<int:pk>/', BoardViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='board-detail'),
+   # Task
+    path('tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'}), name='task-list'),
+    path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='task-detail'),
 
+    path('tasks/assigned-to-me/', TasksAssignedToMeView.as_view(), name='tasks-assigned'),
+    path('tasks/reviewing/', TasksReviewerView.as_view(), name='tasks-reviewer'),
 ]

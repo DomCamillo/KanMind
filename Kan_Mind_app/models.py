@@ -47,7 +47,7 @@ class Task (models.Model):
     description = models.CharField(max_length=255)
     position = models.PositiveBigIntegerField(default=0)
     assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='assigned_tasks', null=True, blank=True)
-    due_date = models.DateTimeField(auto_now_add=True)
+    due_date = models.DateTimeField()
     created_at = models.DateTimeField(auto_now_add=True)
     urgency = models.CharField(max_length=15)
 

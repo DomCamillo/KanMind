@@ -19,6 +19,6 @@ from django.urls import path ,include
 
 urlpatterns = [
     path("admin/", admin.site.urls),
-    path("api/kanban", include("Kan_Mind_app.api.urls")),
+    path("api/", include("Kan_Mind_app.api.urls")),
   #  path("api-auth/", include("rest_framework.urls")),
 ]
