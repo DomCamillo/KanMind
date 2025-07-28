@@ -1,5 +1,5 @@
 from rest_framework import generics
-from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
+from kan_mind_app.models import Column, Task, Comment, Board, BoardUser
 from .serializers import BoardSerializer ,BoardUserSerializer, ColumnSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
@@ -9,6 +9,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
+from .permissions import isOwnerOrAdmin
 
 
 
@@ -55,6 +56,9 @@ class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
 
+    def get_queryset(self):
+        return Column.objects.filter(board__boarduser__user=self.request.user)
+
 
 class CommentView(generics.ListCreateAPIView):
     queryset = Comment.objects.all()
@@ -63,6 +67,7 @@ class CommentView(generics.ListCreateAPIView):
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
+    permission_classes = [isOwnerOrAdmin]
 
 
 
@@ -109,18 +114,26 @@ class EmailCheckView(APIView):
         exists = User.objects.filter(email=email).exists()
         return Response({'email_exists': exists})
 
-class TasksReviewerView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Task.objects.all()
+class TasksReviewerView(generics.ListAPIView):
     serializer_class = TasksSerializer
+
+    def get_queryset(self):
+        return Task.objects.filter(reviewer=self.request.user)
 
 class TaskViewSet(viewsets.ModelViewSet):
      queryset = Task.objects.all()
      serializer_class = TasksSerializer
 
+     def get_queryset(self):
+        return Task.objects.filter(board__boarduser__user=self.request.user)
+
 
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
+
+    def get_queryset(self):
+        return Board.objects.filter(boarduser__user=self.request.user)
 
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer

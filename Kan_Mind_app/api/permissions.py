@@ -1,4 +1,5 @@
 from rest_framework.permissions import BasePermission,  SAFE_METHODS
+from kan_mind_app.models import BoardUser
 
 class isUserOrReadOnly(BasePermission):
     def has_permission(self, request, view):
@@ -16,17 +17,27 @@ class isAdminForDeleteORPatchandReadOnly(BasePermission):
 
 
 class isOwnerOrAdmin(BasePermission):
-
-    def has_object_permission(self, request, view, obj):
-         if request.method in SAFE_METHODS:
+     def has_object_permission(self, request, view, obj):
+        if request.method in SAFE_METHODS:
             return True
-         elif request.method == 'DELETE':
-            return bool(request.user and request.user.is_superuser)
-         else:
-             return bool(request.user and request.user == obj.user)# obj = gleich eintrag in der daten bank
+        return obj.author == request.user or request.user.is_superuser
+
 
 class isAdminOnly(BasePermission):
     def has_permission(self,request, view):
         if request.user.is_superuser :
             return True
         return False
+
+
+class isBoardUser(BasePermission):
+    def has_object_permission(self, request, view, obj):
+        return BoardUser.objects.filter(board=obj.board, user=request.user).exists()
+
+class isBaordAdmin(BasePermission):
+     def has_object_permission(self, request, view, obj):
+        return BoardUser.objects.filter(
+            board=obj.board,
+            user=request.user,
+            role='ADMIN'
+         ).exists()

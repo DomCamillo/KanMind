@@ -2,9 +2,9 @@ from django.contrib import admin
 from django.urls import path
 
 from .views import (TaskViewSet, TasksAssignedToMeView, TasksReviewerView,
-    BoardViewSet,
-    RegistrationView, LoginView,
-    EmailCheckView
+    BoardViewSet,ColumnDetailView,ColumnView,
+    RegistrationView, LoginView, BoardUserView,
+    EmailCheckView, BoardUserDetailView
 )
 urlpatterns = [
 
@@ -21,4 +21,12 @@ urlpatterns = [
 
     path('tasks/assigned-to-me/', TasksAssignedToMeView.as_view(), name='tasks-assigned'),
     path('tasks/reviewing/', TasksReviewerView.as_view(), name='tasks-reviewer'),
+
+    # Column
+    path('columns/', ColumnView.as_view(), name='column-list'),
+    path('columns/<int:pk>/', ColumnDetailView.as_view(), name='column-detail'),
+
+    # BoardUser
+    path('board-users/', BoardUserView.as_view(), name='boarduser-list'),
+    path('board-users/<int:pk>/', BoardUserDetailView.as_view(), name='boarduser-detail'),
 ]
