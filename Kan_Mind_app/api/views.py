@@ -1,5 +1,5 @@
 from rest_framework import generics
-from kan_mind_app.models import Column, Task, Comment, Board, BoardUser
+from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
 from .serializers import BoardSerializer ,BoardUserSerializer, ColumnSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
@@ -9,52 +9,27 @@ from rest_framework.response import Response
 from rest_framework.permissions import AllowAny
 from rest_framework.authtoken.models import Token
 from rest_framework.authtoken.views import ObtainAuthToken
-from .permissions import isOwnerOrAdmin
-
-
-
-
-
-# class TaskView(generics.ListCreateAPIView):
-#     queryset = Task.objects.all()
-#     serializer_class = TasksSerializer
-#     #permission_classes = []
-
-
-# class TaskDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = Task.objects.all()
-#     serializer_class = TasksSerializer
-#     #permission_classes = []
-
-
-# class BoardView(generics.ListCreateAPIView):
-#     queryset = Board.objects.all()
-#     serializer_class = BoardSerializer
-
-# class BoardDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = Board.objects.all()
-#     serializer_class = BoardSerializer
-
-
-
+from .permissions import isOwnerOrAdmin, isUserOrReadOnly ,isAdminForDeleteORPatchandReadOnly, isAdminOnly, isBoardUser ,isBaordAdmin
 
 class BoardUserView(generics.ListCreateAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
-
+    permission_classes = [isUserOrReadOnly]
 
 class BoardUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
+    permission_classes = [isAdminForDeleteORPatchandReadOnly]
 
 class ColumnView(generics.ListCreateAPIView):
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
-
+    permission_classes = [isUserOrReadOnly]
 
 class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
+    permission_classes = [isBoardUser]
 
     def get_queryset(self):
         return Column.objects.filter(board__boarduser__user=self.request.user)
@@ -63,6 +38,7 @@ class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
 class CommentView(generics.ListCreateAPIView):
     queryset = Comment.objects.all()
     serializer_class = CommentSerializer
+    permission_classes = [isUserOrReadOnly]
 
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Comment.objects.all()
@@ -89,16 +65,16 @@ class LoginView(ObtainAuthToken):
         return Response(data)
 
 
-class RegistrationView(APIView):                   # APi view fuer eigene Logik (z. B. Passwort-Check, Token-Erstellung), individuelle Antworten, kein automatisches Speichern
-    permission_classes = [AllowAny]                # damit auch nicht eingeloggte nutzer sich registrieren koennen
+class RegistrationView(APIView):
+    permission_classes = [AllowAny]
 
     def post(self, request):
         serializer = RegistrationSerializer(data=request.data)
-        data = {}                      # leeres dictionary wo entwerder ein error oder die user daten gespeichert
+        data = {}
         if serializer.is_valid():
-            saved_accoun = serializer.save()               # serializer.save() nicht aufrufst, wird der User nicht erstellt, und du kannst auch keinen Token erzeugen.
-            token, created = Token.objects.get_or_create(user=saved_accoun) # erstellt einen token oder prueft ob der user schon eine hat
-            data = {                            # wenn die daten validiert wurden (is_valid) dann werden die userdaten (data) zurueck gesendet
+            saved_accoun = serializer.save()
+            token, created = Token.objects.get_or_create(user=saved_accoun)
+            data = {
                 'token':token.key,
                 'username' : saved_accoun.username,
                 'email': saved_accoun.email,
@@ -109,6 +85,7 @@ class RegistrationView(APIView):                   # APi view fuer eigene Logik 
 
 
 class EmailCheckView(APIView):
+    permission_classes = [AllowAny]
     def post(self, request):
         email = request.data.get('email')
         exists = User.objects.filter(email=email).exists()
@@ -116,6 +93,7 @@ class EmailCheckView(APIView):
 
 class TasksReviewerView(generics.ListAPIView):
     serializer_class = TasksSerializer
+    permission_classes = [isUserOrReadOnly]
 
     def get_queryset(self):
         return Task.objects.filter(reviewer=self.request.user)
@@ -123,20 +101,26 @@ class TasksReviewerView(generics.ListAPIView):
 class TaskViewSet(viewsets.ModelViewSet):
      queryset = Task.objects.all()
      serializer_class = TasksSerializer
+     permission_classes = [isBoardUser]
 
      def get_queryset(self):
-        return Task.objects.filter(board__boarduser__user=self.request.user)
+      user = self.request.user
+      if user.is_authenticated:
+        return Task.objects.filter(column__board__members__user=user)
+      return Task.objects.none()
 
 
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
+    permission_classes = [isUserOrReadOnly & isBaordAdmin]
 
     def get_queryset(self):
         return Board.objects.filter(boarduser__user=self.request.user)
 
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer
+    permission_classes = [isUserOrReadOnly]
 
     def get_queryset(self):
        return Task.objects.filter(assigned_to=self.request.user)

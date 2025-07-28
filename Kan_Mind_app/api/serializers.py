@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from kan_mind_app.models import Board ,BoardUser, Column , Comment, Task
+from Kan_Mind_app.models import Board ,BoardUser, Column , Comment, Task
 from django.contrib.auth.models import User
 
 

@@ -1,5 +1,5 @@
 from rest_framework.permissions import BasePermission,  SAFE_METHODS
-from kan_mind_app.models import BoardUser
+from Kan_Mind_app.models import BoardUser
 
 class isUserOrReadOnly(BasePermission):
     def has_permission(self, request, view):
@@ -39,5 +39,5 @@ class isBaordAdmin(BasePermission):
         return BoardUser.objects.filter(
             board=obj.board,
             user=request.user,
-            role='ADMIN'
+            role='Owner'
          ).exists()
