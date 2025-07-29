@@ -1,5 +1,6 @@
 from django.contrib import admin
 from django.urls import path
+from rest_framework.authtoken.views import obtain_auth_token
 
 from .views import (TaskViewSet, TasksAssignedToMeView, TasksReviewerView,
     BoardViewSet,ColumnDetailView,ColumnView,
@@ -9,7 +10,7 @@ from .views import (TaskViewSet, TasksAssignedToMeView, TasksReviewerView,
 urlpatterns = [
 
     #Login_Registration
-    path('login/', LoginView.as_view(), name='login'),
+    path('login/',LoginView.as_view(), name='login'),
     path('registration/', RegistrationView.as_view(), name='register'),
     path('email-check/', EmailCheckView.as_view(), name='email-check'),
    # Board
