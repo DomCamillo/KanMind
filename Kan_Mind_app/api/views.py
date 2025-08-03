@@ -53,26 +53,25 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
 class LoginView(APIView):
     permission_classes = [AllowAny]
-
+    authentication_classes = []
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
-
-        # Überprüfen, ob ein User mit dieser E-Mail existiert
         try:
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"error": "Invalid email or password"}, status=400)
-
-        # Authentifizieren mit Benutzername (nicht E-Mail!) und Passwort
         auth_user = authenticate(username=user.username, password=password)
 
         if auth_user is not None:
             token, created = Token.objects.get_or_create(user=auth_user)
             return Response({
                 "token": token.key,
-                "username": auth_user.username,
-                "email": auth_user.email,
+                "user" : {
+                    "username": auth_user.username,
+                    "email": auth_user.email,
+                }
+
             })
         else:
             return Response({"error": "Invalid email or password"}, status=400)
@@ -81,50 +80,24 @@ class LoginView(APIView):
 
 
 
-
-
-# class LoginView(APIView):
-#     permission_classes = [AllowAny]
-
-#     def post(self, request):
-#         email = request.data.get("email")
-#         password = request.data.get("password")
-#         data = {}
-
-#         try:
-#             user = User.objects.get(email=email)
-#             auth_user = authenticate(username=user.username, password=password)
-#             if auth_user:
-#                 token, created = Token.objects.get_or_create(user=auth_user)
-#                 data = {
-#                     "token": token.key,
-#                     "username": auth_user.username,
-#                     "email": auth_user.email,}
-#             else:
-#                 data = {"error": "Invalid password"}
-#         except User.DoesNotExist:
-#             data = {"error": "User with this email does not exist"}
-
-#         return Response(data)
-
-
 class RegistrationView(APIView):
     permission_classes = [AllowAny]
-
+    authentication_classes = []
     def post(self, request):
+        print("REGISTRATION REQUEST:", request.data)
         serializer = RegistrationSerializer(data=request.data)
-        data = {}
         if serializer.is_valid():
-            saved_accoun = serializer.save()
-            token, created = Token.objects.get_or_create(user=saved_accoun)
-            data = {
-                'token':token.key,
-                'username' : saved_accoun.username,
-                'email': saved_accoun.email,
-            }
+            user = serializer.save()
+            token, _ = Token.objects.get_or_create(user=user)
+            return Response({
+                "token": token.key,
+                "user": {
+                    "username": user.username,
+                    "email": user.email,
+                    }
+            }, status=status.HTTP_201_CREATED)
         else:
-            data=serializer.errors
-        return Response(data)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 class EmailCheckView(APIView):
@@ -161,7 +134,7 @@ class BoardViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         user = self.request.user
         if user.is_anonymous:
-            raise NotAuthenticated("Du bist nicht eingeloggt.")
+            raise NotAuthenticated("You are not logged in")
         return Board.objects.filter(members__user=user)
 
 class TasksAssignedToMeView(ListAPIView):
