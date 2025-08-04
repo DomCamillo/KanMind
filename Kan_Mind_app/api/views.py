@@ -68,7 +68,9 @@ class LoginView(APIView):
             return Response({
                 "token": token.key,
                 "user" : {
+                    "id": auth_user.id,
                     "username": auth_user.username,
+                    "fullname": auth_user.username,
                     "email": auth_user.email,
                 }
 
@@ -92,7 +94,9 @@ class RegistrationView(APIView):
             return Response({
                 "token": token.key,
                 "user": {
+                    "id": user.id,
                     "username": user.username,
+                    "fullname": user.username,
                     "email": user.email,
                     }
             }, status=status.HTTP_201_CREATED)
@@ -102,6 +106,12 @@ class RegistrationView(APIView):
 
 class EmailCheckView(APIView):
     permission_classes = [AllowAny]
+
+    def get(self, request):
+        email = request.query_params.get('email')
+        exists = User.objects.filter(email=email).exists()
+        return Response({'email_exists': exists})
+
     def post(self, request):
         email = request.data.get('email')
         exists = User.objects.filter(email=email).exists()
@@ -136,6 +146,9 @@ class BoardViewSet(viewsets.ModelViewSet):
         if user.is_anonymous:
             raise NotAuthenticated("You are not logged in")
         return Board.objects.filter(members__user=user)
+
+    def perform_create(self, serializer):
+        serializer.save(owner=self.request.user)
 
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer
