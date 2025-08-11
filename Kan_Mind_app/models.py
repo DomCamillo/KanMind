@@ -4,7 +4,7 @@ from django.contrib.auth.models import User
 class Board (models.Model):
     title = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
-    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_baords")
+    owner = models.ForeignKey(User, on_delete=models.CASCADE, related_name="owned_boards")
 
     def __str__(self):
         return self.title
@@ -26,7 +26,7 @@ class BoardUser(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="member")
 
     def __str__(self):
-        return self.user
+        return str(self.user)
 
 
 
@@ -36,21 +36,32 @@ class Column (models.Model):
     position = models.PositiveBigIntegerField(default=0)
 
     def __str__(self):
-        return f"{self.title} ({self.baord.title})"
+        return f"{self.title} ({self.board.title})"
 
 
+STATUS_CHOICES = [
+    ('to-do', 'To Do'),
+    ('in-progress', 'In Progress'),
+    ('review', 'Review'),
+    ('done', 'Done'),
+]
 
-
-class Task (models.Model):
-    column = models.ForeignKey(Column, related_name='tasks', on_delete=models.CASCADE)
+class Task(models.Model):
     title = models.CharField(max_length=255)
-    description = models.CharField(max_length=255)
-    position = models.PositiveBigIntegerField(default=0)
-    assigned_to = models.ForeignKey(User, on_delete=models.SET_NULL, related_name='assigned_tasks', null=True, blank=True)
-    due_date = models.DateTimeField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    urgency = models.CharField(max_length=15)
+    description = models.TextField(blank=True)
+    column = models.ForeignKey('Column',related_name='tasks', on_delete=models.CASCADE)
+    assigned_to = models.ForeignKey(User, related_name='tasks_assigned',on_delete=models.SET_NULL, null=True, blank=True)
+    reviewer = models.ForeignKey(User, related_name='tasks_to_review',on_delete=models.SET_NULL, null=True, blank=True)
+    due_date = models.DateField(null=True, blank=True)
+    priority = models.CharField(max_length=20,choices=[
+            ('low', 'Low'),
+            ('medium', 'Medium'),
+            ('high', 'High')
+        ],default='medium')
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='to-do')
     def __str__(self):
         return self.title
 
