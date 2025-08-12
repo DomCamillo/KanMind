@@ -4,7 +4,8 @@ from .serializers import BoardSerializer ,BoardUserSerializer, ColumnSerializer,
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
 from django.contrib.auth import authenticate
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model
+#from django.contrib.auth.models import User
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny ,IsAuthenticated
@@ -103,19 +104,42 @@ class RegistrationView(APIView):
         else:
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-
+User = get_user_model()
 class EmailCheckView(APIView):
     permission_classes = [AllowAny]
 
+    def _find_user_by_email(self, email):
+        email = (email or '').strip()
+        if not email:
+            return None
+        return User.objects.filter(email__iexact=email).first()
+
     def get(self, request):
-        email = request.query_params.get('email')
-        exists = User.objects.filter(email=email).exists()
-        return Response({'email_exists': exists})
+        email = request.query_params.get('email', '')
+        user = self._find_user_by_email(email)
+        if user:
+            return Response({
+                "email_exists": True,
+                "id": user.id,
+                "email": user.email,
+                "username": getattr(user, "username", "")
+            })
+        return Response({"email_exists": False})
 
     def post(self, request):
-        email = request.data.get('email')
-        exists = User.objects.filter(email=email).exists()
-        return Response({'email_exists': exists})
+        email = request.data.get('email', '')
+        user = self._find_user_by_email(email)
+        if user:
+            return Response({
+                "email_exists": True,
+                "id": user.id,
+                "email": user.email,
+                "username": getattr(user, "username", "")
+            })
+        return Response({"email_exists": False})
+
+
+
 
 class TasksReviewerView(generics.ListAPIView):
     serializer_class = TasksSerializer
@@ -134,6 +158,26 @@ class TaskViewSet(viewsets.ModelViewSet):
       if user.is_authenticated:
         return Task.objects.filter(column__board__members__user=user)
       return Task.objects.none()
+
+     def create(self, request, *args, **kwargs):
+        data = request.data.copy()
+        status = data.get("status")
+        board_id = data.get("board")
+
+        if status and board_id and not data.get("column"):
+            try:
+                column = Column.objects.get(
+                board_id=board_id,
+                title__iexact=status.replace("-", " ")
+            )
+                data["column"] = column.id
+            except Column.DoesNotExist:
+                return Response({"column": ["Matching column not found for given status."]}, status=400)
+
+        serializer = self.get_serializer(data=data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
+        return Response(serializer.data, status=201)
 
 
 class BoardViewSet(viewsets.ModelViewSet):
