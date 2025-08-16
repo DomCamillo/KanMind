@@ -11,6 +11,13 @@ class Board (models.Model):
     def __str__(self):
         return self.title
 
+    # def save(self, *args, **kwargs):
+    #     is_new = self.pk is None
+    #     super().save(*args, **kwargs)
+    #     if is_new:
+
+    #         for status in ['to-do', 'in-progress', 'review', 'done']:
+    #             Column.objects.create(board=self, title=status)
 
 
 

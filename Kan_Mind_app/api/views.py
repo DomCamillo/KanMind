@@ -3,6 +3,7 @@ from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
 from .serializers import BoardSerializer ,BoardUserSerializer, ColumnSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
+from Kan_Mind_app.models import STATUS_CHOICES
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
 #from django.contrib.auth.models import User
@@ -165,14 +166,23 @@ class TaskViewSet(viewsets.ModelViewSet):
         board_id = data.get("board")
 
         if status and board_id and not data.get("column"):
-            try:
-                column = Column.objects.get(
-                board_id=board_id,
-                title__iexact=status.replace("-", " ")
+
+            board = Board.objects.get(id=board_id)
+            existing_columns = Column.objects.filter(board=board)
+        if not existing_columns.exists():
+
+            for s in ['to-do', 'in-progress', 'review', 'done']:
+                Column.objects.create(board=board, title=s)
+
+
+        try:
+            column = Column.objects.get(board=board, title__iexact=status)
+            data["column"] = column.id
+        except Column.DoesNotExist:
+            return Response(
+                {"column": ["Matching column not found for given status."]},
+                status=400
             )
-                data["column"] = column.id
-            except Column.DoesNotExist:
-                return Response({"column": ["Matching column not found for given status."]}, status=400)
 
         serializer = self.get_serializer(data=data)
         serializer.is_valid(raise_exception=True)

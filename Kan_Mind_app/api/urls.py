@@ -1,5 +1,5 @@
 from django.contrib import admin
-from django.urls import path
+from django.urls import path, re_path
 from rest_framework.authtoken.views import obtain_auth_token
 
 from .views import (TaskViewSet, TasksAssignedToMeView, TasksReviewerView,
@@ -15,7 +15,7 @@ urlpatterns = [
     path('email-check/', EmailCheckView.as_view(), name='email-check'),
    # Board
     path('boards/', BoardViewSet.as_view({'get': 'list', 'post': 'create'}), name='board-list'),
-    path('boards/<int:pk>/', BoardViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='board-detail'),
+    re_path(r'^boards/(?P<pk>\d+)/?$', BoardViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='board-detail'),
    # Task
     path('tasks/', TaskViewSet.as_view({'get': 'list', 'post': 'create'}), name='task-list'),
     path('tasks/<int:pk>/', TaskViewSet.as_view({'get': 'retrieve', 'put': 'update', 'delete': 'destroy'}), name='task-detail'),

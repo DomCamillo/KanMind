@@ -35,13 +35,15 @@ class BoardSerializer(serializers.ModelSerializer):
     ticket_count = serializers.SerializerMethodField()
     tasks_to_do_count = serializers.SerializerMethodField()
     tasks_high_prio_count = serializers.SerializerMethodField()
+    tasks = serializers.SerializerMethodField()
 
     class Meta:
         model = Board
         fields = [
             'id', 'title', 'created_at', 'owner',
             'members', 'members_input',
-            'member_count', 'ticket_count', 'tasks_to_do_count', 'tasks_high_prio_count'
+            'member_count', 'ticket_count', 'tasks_to_do_count',
+            'tasks_high_prio_count', 'tasks'
         ]
 
     def get_member_count(self, obj):
@@ -57,6 +59,10 @@ class BoardSerializer(serializers.ModelSerializer):
     def get_tasks_high_prio_count(self, obj):
         return Task.objects.filter(column__board=obj, priority='high').count()
 
+    def get_tasks(self, obj):
+        tasks = Task.objects.filter(column__board=obj)
+        return TasksSerializer(tasks, many=True).data
+
     def create(self, validated_data):
         members = validated_data.pop('members', [])
         board = Board.objects.create(**validated_data)
@@ -68,52 +74,6 @@ class BoardSerializer(serializers.ModelSerializer):
         return board
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-# class BoardSerializer(serializers.ModelSerializer):
-#     members = serializers.PrimaryKeyRelatedField(
-#         many=True,
-#         queryset=User.objects.all(),
-#         write_only=True,
-#         required=False
-#     )
-#     members_input = BoardUserSerializer(source='members', many=True, read_only=True)
-#     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
-
-#     class Meta:
-#         model = Board
-#         fields = ['id', 'title', 'created_at', 'owner', 'members', 'members_input']
-
-#     def create(self, validated_data):
-#         members = validated_data.pop('members', [])
-#         board = Board.objects.create(**validated_data)
-#         BoardUser.objects.create(user=board.owner, board=board, role="owner")
-
-#         for user in members:
-#             BoardUser.objects.create(user=user, board=board, role="member")
-
-#         return board
-
-
-
-
-
-
-
 class ColumnSerializer(serializers.ModelSerializer):
     class Meta:
         model = Column
@@ -121,9 +81,30 @@ class ColumnSerializer(serializers.ModelSerializer):
 
 
 class TasksSerializer(serializers.ModelSerializer):
+    assignee_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source="assigned_to",
+        write_only=True,
+        required=False
+    )
+    reviewer_id = serializers.PrimaryKeyRelatedField(
+        queryset=User.objects.all(),
+        source="reviewer",
+        write_only=True,
+        required=False
+    )
+    board = serializers.PrimaryKeyRelatedField(
+        queryset=Board.objects.all(),
+        write_only=True
+    )
+
     class Meta:
         model = Task
-        fields ='__all__'
+        fields = [
+            "id", "title", "description", "status", "priority", "due_date",
+            "column", "board", "assignee_id", "reviewer_id",
+            "created_at", "updated_at",'board'
+        ]
 
 
 class CommentSerializer(serializers.ModelSerializer):
