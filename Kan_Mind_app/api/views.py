@@ -18,25 +18,25 @@ from .permissions import isOwnerOrAdmin, isUserOrReadOnly ,IsAdminForCrud, isAdm
 class BoardUserView(generics.ListCreateAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
-    permission_classes = [isBoardUser or isBaordAdmin & IsAuthenticated]
+    permission_classes = [ IsAuthenticated]
 
 class BoardUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
-    permission_classes = [isBoardUser or isBaordAdmin & IsAuthenticated]
+    permission_classes = [ IsAuthenticated]
 
 class ColumnView(generics.ListCreateAPIView):
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
-    permission_classes = [isUserOrReadOnly & isBoardUser]
+    permission_classes = [ IsAuthenticated]
 
 class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Column.objects.all()
     serializer_class = ColumnSerializer
-    permission_classes = [isBoardUser or isBaordAdmin]
+    permission_classes = [ IsAuthenticated]
 
     def get_queryset(self):
-        return Column.objects.filter(board__boarduser__user=self.request.user)
+        return Column.objects.filter(board__members__user=self.request.user)
 
 
 class CommentView(generics.ListCreateAPIView):
@@ -142,6 +142,8 @@ class EmailCheckView(APIView):
 
 
 
+
+
 class TasksReviewerView(generics.ListAPIView):
     serializer_class = TasksSerializer
     permission_classes = [isUserOrReadOnly]
@@ -149,51 +151,119 @@ class TasksReviewerView(generics.ListAPIView):
     def get_queryset(self):
         return Task.objects.filter(reviewer=self.request.user)
 
+
+
+
+
+
 class TaskViewSet(viewsets.ModelViewSet):
-     queryset = Task.objects.all()
-     serializer_class = TasksSerializer
-     permission_classes = [isBoardUser & IsAuthenticated]
+    queryset = Task.objects.all()
+    serializer_class = TasksSerializer
+    permission_classes = [IsAuthenticated]  # Vereinfacht
 
-     def get_queryset(self):
-      user = self.request.user
-      if user.is_authenticated:
-        return Task.objects.filter(column__board__members__user=user)
-      return Task.objects.none()
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            return Task.objects.filter(column__board__members__user=user)
+        return Task.objects.none()
 
-     def create(self, request, *args, **kwargs):
+    def create(self, request, *args, **kwargs):
         data = request.data.copy()
-        status = data.get("status")
+        status_value = data.get("status")
         board_id = data.get("board")
+        assignee_id = data.get("assignee_id")
+        reviewer_id = data.get("reviewer_id")
 
-        if status and board_id and not data.get("column"):
+        print(f"DEBUG: Received data: {data}")
+        print(f"DEBUG: User: {request.user}")
+        print(f"DEBUG: Assignee ID: {assignee_id}, Reviewer ID: {reviewer_id}")
 
-            board = Board.objects.get(id=board_id)
-            existing_columns = Column.objects.filter(board=board)
-        if not existing_columns.exists():
+        # Debug: Prüfe ob User existieren
+        if assignee_id:
+            try:
+                assignee = User.objects.get(id=assignee_id)
+                print(f"DEBUG: Assignee found: {assignee.username}")
+            except User.DoesNotExist:
+                print(f"DEBUG: Assignee with ID {assignee_id} does not exist!")
 
-            for s in ['to-do', 'in-progress', 'review', 'done']:
-                Column.objects.create(board=board, title=s)
+        if reviewer_id:
+            try:
+                reviewer = User.objects.get(id=reviewer_id)
+                print(f"DEBUG: Reviewer found: {reviewer.username}")
+            except User.DoesNotExist:
+                print(f"DEBUG: Reviewer with ID {reviewer_id} does not exist!")
 
+        # Debug: Prüfe Board-Members
+        if board_id:
+            board_members = BoardUser.objects.filter(board_id=board_id)
+            print(f"DEBUG: Board {board_id} has members: {[m.user.username for m in board_members]}")
 
-        try:
-            column = Column.objects.get(board=board, title__iexact=status)
-            data["column"] = column.id
-        except Column.DoesNotExist:
-            return Response(
-                {"column": ["Matching column not found for given status."]},
-                status=400
-            )
+        # Automatische Column-Zuweisung basierend auf Status
+        if status_value and board_id and not data.get("column"):
+            try:
+                column = Column.objects.get(
+                    board_id=board_id,
+                    title__iexact=status_value
+                )
+                data["column"] = column.id
+                print(f"DEBUG: Found column {column.id} for status {status_value}")
+            except Column.DoesNotExist:
+                print(f"DEBUG: No column found for status {status_value} in board {board_id}")
+                return Response(
+                    {"error": f"No column found for status '{status_value}' in this board."},
+                    status=400
+                )
 
         serializer = self.get_serializer(data=data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            print(f"DEBUG: Serializer errors: {serializer.errors}")
+            return Response(serializer.errors, status=400)
+
         self.perform_create(serializer)
         return Response(serializer.data, status=201)
+
+# class TaskViewSet(viewsets.ModelViewSet):
+#     queryset = Task.objects.all()
+#     serializer_class = TasksSerializer
+#     permission_classes = [isBoardUser & IsAuthenticated]
+
+#     def get_queryset(self):
+#         user = self.request.user
+#         if user.is_authenticated:
+#             return Task.objects.filter(column__board__members__user=user)
+#         return Task.objects.none()
+
+#     def create(self, request, *args, **kwargs):
+#         print(f"DEBUG: Request data: {request.data}")
+#         print(f"DEBUG: User: {request.user}")
+#         data = request.data.copy()
+#         status = data.get("status")
+#         board_id = data.get("board")
+
+
+#         if status and board_id and not data.get("column"):
+#             try:
+#                 column = Column.objects.get(
+#                     board_id=board_id,
+#                     title__iexact=status
+#                 )
+#                 data["column"] = column.id
+#             except Column.DoesNotExist:
+#                 return Response(
+#                     {"column": ["Matching column not found for given status."]},
+#                     status=400
+#                 )
+
+#         serializer = self.get_serializer(data=data)
+#         serializer.is_valid(raise_exception=True)
+#         self.perform_create(serializer)
+#         return Response(serializer.data, status=201)
 
 
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
-    permission_classes = [IsAuthenticated or isBaordAdmin]#[isUserOrReadOnly or isBaordAdmin]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -202,7 +272,39 @@ class BoardViewSet(viewsets.ModelViewSet):
         return Board.objects.filter(members__user=user)
 
     def perform_create(self, serializer):
-        serializer.save(owner=self.request.user)
+        board = serializer.save(owner=self.request.user)
+
+        # Automatisch Default-Columns erstellen
+        default_columns = [
+            ('to-do', 0),
+            ('in-progress', 1),
+            ('review', 2),
+            ('done', 3)
+        ]
+
+        for title, position in default_columns:
+            Column.objects.create(
+                board=board,
+                title=title,
+                position=position
+            )
+
+        return board
+
+
+# class BoardViewSet(viewsets.ModelViewSet):
+#     queryset = Board.objects.all()
+#     serializer_class = BoardSerializer
+#     permission_classes = [IsAuthenticated or isBaordAdmin]#[isUserOrReadOnly or isBaordAdmin]
+
+#     def get_queryset(self):
+#         user = self.request.user
+#         if user.is_anonymous:
+#             raise NotAuthenticated("You are not logged in")
+#         return Board.objects.filter(members__user=user)
+
+#     def perform_create(self, serializer):
+#         serializer.save(owner=self.request.user)
 
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer

@@ -3,6 +3,14 @@ from django.db import models
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
+STATUS_CHOICES = [
+    ('to-do', 'To Do'),
+    ('in-progress', 'In Progress'),
+    ('review', 'Review'),
+    ('done', 'Done'),
+]
+
+
 class Board (models.Model):
     title = models.CharField(max_length=255)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -11,13 +19,6 @@ class Board (models.Model):
     def __str__(self):
         return self.title
 
-    # def save(self, *args, **kwargs):
-    #     is_new = self.pk is None
-    #     super().save(*args, **kwargs)
-    #     if is_new:
-
-    #         for status in ['to-do', 'in-progress', 'review', 'done']:
-    #             Column.objects.create(board=self, title=status)
 
 
 
@@ -41,19 +42,13 @@ class BoardUser(models.Model):
 
 class Column (models.Model):
     board = models.ForeignKey(Board, on_delete=models.CASCADE, related_name='columns')
-    title = models.CharField(max_length=100)
+    title = models.CharField(max_length=100, choices=STATUS_CHOICES)
     position = models.PositiveBigIntegerField(default=0)
 
     def __str__(self):
         return f"{self.title} ({self.board.title})"
 
 
-STATUS_CHOICES = [
-    ('to-do', 'To Do'),
-    ('in-progress', 'In Progress'),
-    ('review', 'Review'),
-    ('done', 'Done'),
-]
 
 class Task(models.Model):
     title = models.CharField(max_length=255)
