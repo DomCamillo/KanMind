@@ -4,38 +4,6 @@ from Kan_Mind_app.models import Board ,BoardUser, Column , Comment, Task
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
-
-# class TasksSerializer(serializers.ModelSerializer):
-#     assignee = serializers.StringRelatedField(source="assigned_to", read_only=True)
-#     reviewer = serializers.StringRelatedField(read_only=True)
-#     assignee_id = serializers.PrimaryKeyRelatedField(
-#         queryset=User.objects.all(),
-#         source="assigned_to",
-#         write_only=True,
-#         required=False
-#     )
-
-#     reviewer_id = serializers.PrimaryKeyRelatedField(
-#         queryset=User.objects.all(),
-#         source="reviewer",
-#         write_only=True,
-#         required=False
-#     )
-
-#     board = serializers.PrimaryKeyRelatedField(
-#         queryset=Board.objects.all(),
-#         write_only=True
-#     )
-#     column_title = serializers.CharField(source="column.title", read_only=True)
-
-#     class Meta:
-#         model = Task
-#         fields = [
-#             "id", "title", "description", "status", "priority", "due_date",
-#             "column", "column_title", "board", "assignee", "reviewer",
-#             "assignee_id", "reviewer_id", "created_at", "updated_at"
-#         ]
-
 class TasksSerializer(serializers.ModelSerializer):
     assignee = serializers.SerializerMethodField()
     reviewer = serializers.SerializerMethodField()
@@ -187,9 +155,17 @@ class ColumnSerializer(serializers.ModelSerializer):
 
 
 class CommentSerializer(serializers.ModelSerializer):
+    author = serializers.SerializerMethodField()
+    task = serializers.PrimaryKeyRelatedField(read_only=True)
+
     class Meta:
         model = Comment
-        fields = ['id','task', 'author', 'content', 'created_at']
+        fields = ['id', 'task', 'author', 'content', 'created_at']
+
+    def get_author(self, obj):
+
+        return obj.author.get_full_name() or obj.author.username
+
 
 
 

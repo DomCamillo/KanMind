@@ -39,15 +39,49 @@ class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
         return Column.objects.filter(board__members__user=self.request.user)
 
 
+
 class CommentView(generics.ListCreateAPIView):
-    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [isCommentAuthorOrAdmin]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        task_id = self.kwargs.get('task_pk')  # task_pk aus URL
+        return Comment.objects.filter(task_id=task_id).order_by('-created_at')  # Neueste zuerst
+
+    def perform_create(self, serializer):
+        task_id = self.kwargs.get('task_pk')  # task_pk aus URL
+
+        try:
+            task = Task.objects.get(id=task_id)
+        except Task.DoesNotExist:
+            from rest_framework.exceptions import NotFound
+            raise NotFound("Task not found.")
+
+        user = self.request.user
+        if not BoardUser.objects.filter(board=task.column.board, user=user).exists():
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("You are not a member of this board.")
+
+
+        serializer.save(task=task, author=user)
+
 
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Comment.objects.all()
     serializer_class = CommentSerializer
-    permission_classes = [isCommentAuthorOrAdmin]
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        task_id = self.kwargs.get('task_pk')
+        return Comment.objects.filter(task_id=task_id)
+
+    def get_object(self):
+        comment = super().get_object()
+        if self.request.method in ['PUT', 'PATCH', 'DELETE']:
+            if comment.author != self.request.user:
+                from rest_framework.exceptions import PermissionDenied
+                raise PermissionDenied("You can only edit/delete your own comments.")
+        return comment
+
 
 
 
@@ -174,31 +208,18 @@ class TaskViewSet(viewsets.ModelViewSet):
         assignee_id = data.get("assignee_id")
         reviewer_id = data.get("reviewer_id")
 
-        print(f"DEBUG: Received data: {data}")
-        print(f"DEBUG: User: {request.user}")
-        print(f"DEBUG: Assignee ID: {assignee_id}, Reviewer ID: {reviewer_id}")
-
-        # Debug: Prüfe ob User existieren
         if assignee_id:
             try:
-                assignee = User.objects.get(id=assignee_id)
-                print(f"DEBUG: Assignee found: {assignee.username}")
+                User.objects.get(id=assignee_id)
             except User.DoesNotExist:
-                print(f"DEBUG: Assignee with ID {assignee_id} does not exist!")
+                pass
 
         if reviewer_id:
             try:
-                reviewer = User.objects.get(id=reviewer_id)
-                print(f"DEBUG: Reviewer found: {reviewer.username}")
+                User.objects.get(id=reviewer_id)
             except User.DoesNotExist:
-                print(f"DEBUG: Reviewer with ID {reviewer_id} does not exist!")
+                pass
 
-        # Debug: Prüfe Board-Members
-        if board_id:
-            board_members = BoardUser.objects.filter(board_id=board_id)
-            print(f"DEBUG: Board {board_id} has members: {[m.user.username for m in board_members]}")
-
-        # Automatische Column-Zuweisung basierend auf Status
         if status_value and board_id and not data.get("column"):
             try:
                 column = Column.objects.get(
@@ -206,9 +227,7 @@ class TaskViewSet(viewsets.ModelViewSet):
                     title__iexact=status_value
                 )
                 data["column"] = column.id
-                print(f"DEBUG: Found column {column.id} for status {status_value}")
             except Column.DoesNotExist:
-                print(f"DEBUG: No column found for status {status_value} in board {board_id}")
                 return Response(
                     {"error": f"No column found for status '{status_value}' in this board."},
                     status=400
@@ -216,48 +235,11 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         serializer = self.get_serializer(data=data)
         if not serializer.is_valid():
-            print(f"DEBUG: Serializer errors: {serializer.errors}")
             return Response(serializer.errors, status=400)
 
         self.perform_create(serializer)
         return Response(serializer.data, status=201)
 
-# class TaskViewSet(viewsets.ModelViewSet):
-#     queryset = Task.objects.all()
-#     serializer_class = TasksSerializer
-#     permission_classes = [isBoardUser & IsAuthenticated]
-
-#     def get_queryset(self):
-#         user = self.request.user
-#         if user.is_authenticated:
-#             return Task.objects.filter(column__board__members__user=user)
-#         return Task.objects.none()
-
-#     def create(self, request, *args, **kwargs):
-#         print(f"DEBUG: Request data: {request.data}")
-#         print(f"DEBUG: User: {request.user}")
-#         data = request.data.copy()
-#         status = data.get("status")
-#         board_id = data.get("board")
-
-
-#         if status and board_id and not data.get("column"):
-#             try:
-#                 column = Column.objects.get(
-#                     board_id=board_id,
-#                     title__iexact=status
-#                 )
-#                 data["column"] = column.id
-#             except Column.DoesNotExist:
-#                 return Response(
-#                     {"column": ["Matching column not found for given status."]},
-#                     status=400
-#                 )
-
-#         serializer = self.get_serializer(data=data)
-#         serializer.is_valid(raise_exception=True)
-#         self.perform_create(serializer)
-#         return Response(serializer.data, status=201)
 
 
 class BoardViewSet(viewsets.ModelViewSet):
