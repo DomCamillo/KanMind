@@ -49,7 +49,7 @@ class CommentView(generics.ListCreateAPIView):
         return Comment.objects.filter(task_id=task_id).order_by('-created_at')  # Neueste zuerst
 
     def perform_create(self, serializer):
-        task_id = self.kwargs.get('task_pk')  # task_pk aus URL
+        task_id = self.kwargs.get('task_pk')
 
         try:
             task = Task.objects.get(id=task_id)
@@ -255,15 +255,12 @@ class BoardViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
-
-        # Automatisch Default-Columns erstellen
         default_columns = [
             ('to-do', 0),
             ('in-progress', 1),
             ('review', 2),
             ('done', 3)
         ]
-
         for title, position in default_columns:
             Column.objects.create(
                 board=board,
@@ -274,19 +271,6 @@ class BoardViewSet(viewsets.ModelViewSet):
         return board
 
 
-# class BoardViewSet(viewsets.ModelViewSet):
-#     queryset = Board.objects.all()
-#     serializer_class = BoardSerializer
-#     permission_classes = [IsAuthenticated or isBaordAdmin]#[isUserOrReadOnly or isBaordAdmin]
-
-#     def get_queryset(self):
-#         user = self.request.user
-#         if user.is_anonymous:
-#             raise NotAuthenticated("You are not logged in")
-#         return Board.objects.filter(members__user=user)
-
-#     def perform_create(self, serializer):
-#         serializer.save(owner=self.request.user)
 
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer
