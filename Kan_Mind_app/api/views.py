@@ -1,6 +1,6 @@
 from rest_framework import generics
 from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
-from .serializers import BoardSerializer ,BoardUserSerializer, ColumnSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
+from .serializers import BoardSerializer ,BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
 from Kan_Mind_app.models import STATUS_CHOICES
@@ -25,18 +25,18 @@ class BoardUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = BoardUserSerializer
     permission_classes = [ IsAuthenticated]
 
-class ColumnView(generics.ListCreateAPIView):
-    queryset = Column.objects.all()
-    serializer_class = ColumnSerializer
-    permission_classes = [ IsAuthenticated]
+# class ColumnView(generics.ListCreateAPIView):
+#     queryset = Column.objects.all()
+#     serializer_class = ColumnSerializer
+#     permission_classes = [ IsAuthenticated]
 
-class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Column.objects.all()
-    serializer_class = ColumnSerializer
-    permission_classes = [ IsAuthenticated]
+# class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
+#     queryset = Column.objects.all()
+#     serializer_class = ColumnSerializer
+#     permission_classes = [ IsAuthenticated]
 
-    def get_queryset(self):
-        return Column.objects.filter(board__members__user=self.request.user)
+#     def get_queryset(self):
+#         return Column.objects.filter(board__members__user=self.request.user)
 
 
 

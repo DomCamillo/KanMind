@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from Kan_Mind_app.models import Board, BoardUser, Column, Comment, Task
+from Kan_Mind_app.models import Board, BoardUser, Comment, Task
 # from django.contrib.auth.models import User
 from django.contrib.auth import get_user_model
 User = get_user_model()
@@ -8,6 +8,9 @@ User = get_user_model()
 class TasksSerializer(serializers.ModelSerializer):
     assignee = serializers.SerializerMethodField()
     reviewer = serializers.SerializerMethodField()
+    comments_count = serializers.SerializerMethodField()
+    board_id = serializers.SerializerMethodField()
+    board = serializers.SerializerMethodField()
 
     assignee_id = serializers.PrimaryKeyRelatedField(
         queryset=BoardUser.objects.all(),
@@ -24,12 +27,18 @@ class TasksSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-
-    board = serializers.PrimaryKeyRelatedField(
+    board_write = serializers.PrimaryKeyRelatedField(
         queryset=Board.objects.all(),
         write_only=True,
-        required=False
+        required=False,
+        source='board'
     )
+
+    # board = serializers.PrimaryKeyRelatedField(
+    #     queryset=Board.objects.all(),
+    #     write_only=True,
+    #     required=False
+    # )
     column_title = serializers.CharField(source="column.title", read_only=True)
 
     class Meta:
@@ -37,8 +46,17 @@ class TasksSerializer(serializers.ModelSerializer):
         fields = [
             "id", "title", "description", "status", "priority", "due_date",
             "column", "column_title", "board", "assignee", "reviewer",
-            "assignee_id", "reviewer_id", "created_at", "updated_at"
+            "assignee_id", "reviewer_id", "created_at", "updated_at","comments_count",
+            "board_id","board_write"
         ]
+    def get_board(self, obj):
+        return obj.column.board.id
+
+    def get_board_id(self, obj):
+        return obj.column.board.id
+
+    def get_comments_count(self, obj):
+        return obj.comments.count()
 
     def get_assignee(self, obj):
         if obj.assigned_to:
@@ -83,7 +101,6 @@ class TasksSerializer(serializers.ModelSerializer):
         assigned_to = validated_data.pop("assigned_to", None)
         reviewer = validated_data.pop("reviewer", None)
 
-        # Column anhand des Boards bestimmen (z.B. default: erste Column im Board)
         if board and "column" not in validated_data:
             first_column = board.column_set.first()
             if not first_column:
@@ -178,10 +195,10 @@ class BoardSerializer(serializers.ModelSerializer):
 
 
 
-class ColumnSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Column
-        fields = ['id', 'board', 'title', 'position']
+# class ColumnSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = Column
+#         fields = ['id', 'board', 'title', 'position']
 
 
 class CommentSerializer(serializers.ModelSerializer):
@@ -193,7 +210,6 @@ class CommentSerializer(serializers.ModelSerializer):
         fields = ['id', 'task', 'author', 'content', 'created_at']
 
     def get_author(self, obj):
-
         return obj.author.get_full_name() or obj.author.username
 
 
