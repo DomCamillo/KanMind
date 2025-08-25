@@ -6,7 +6,7 @@ from rest_framework import status, viewsets
 from Kan_Mind_app.models import STATUS_CHOICES
 from django.contrib.auth import authenticate
 from django.contrib.auth import get_user_model
-#from django.contrib.auth.models import User
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny ,IsAuthenticated
@@ -15,42 +15,58 @@ from rest_framework.exceptions import NotAuthenticated
 from rest_framework.authtoken.views import ObtainAuthToken
 from .permissions import isOwnerOrAdmin, isUserOrReadOnly ,IsAdminForCrud, isAdminOnly, isBoardUser ,isBaordAdmin, isCommentAuthorOrAdmin
 
+from rest_framework import generics
+from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
+from .serializers import BoardSerializer, BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
+from rest_framework.generics import ListAPIView
+from rest_framework import status, viewsets
+from Kan_Mind_app.models import STATUS_CHOICES
+from django.contrib.auth import authenticate, get_user_model
+
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.authtoken.models import Token
+from rest_framework.exceptions import NotAuthenticated
+from rest_framework.authtoken.views import ObtainAuthToken
+from .permissions import (
+    isOwnerOrAdmin, isUserOrReadOnly, IsAdminForCrud,
+    isAdminOnly, isBoardUser, isBaordAdmin, isCommentAuthorOrAdmin
+)
+
+
+# -------------------- BoardUser Views --------------------
+
+# Handles listing all BoardUser entries and creating new ones.
+# Requires authentication – only logged-in users can access.
 class BoardUserView(generics.ListCreateAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
-    permission_classes = [ IsAuthenticated]
+    permission_classes = [IsAuthenticated]
 
+
+# Handles retrieving, updating, or deleting a single BoardUser.
+# Requires authentication.
 class BoardUserDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = BoardUser.objects.all()
     serializer_class = BoardUserSerializer
-    permission_classes = [ IsAuthenticated]
-
-# class ColumnView(generics.ListCreateAPIView):
-#     queryset = Column.objects.all()
-#     serializer_class = ColumnSerializer
-#     permission_classes = [ IsAuthenticated]
-
-# class ColumnDetailView(generics.RetrieveUpdateDestroyAPIView):
-#     queryset = Column.objects.all()
-#     serializer_class = ColumnSerializer
-#     permission_classes = [ IsAuthenticated]
-
-#     def get_queryset(self):
-#         return Column.objects.filter(board__members__user=self.request.user)
+    permission_classes = [IsAuthenticated]
 
 
+# -------------------- Comment Views --------------------
 
+# Handles listing comments for a given task and creating new comments.
+# Ensures the requesting user is a member of the board the task belongs to.
 class CommentView(generics.ListCreateAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        task_id = self.kwargs.get('task_pk')  # task_pk aus URL
-        return Comment.objects.filter(task_id=task_id).order_by('-created_at')  # Neueste zuerst
+        task_id = self.kwargs.get('task_pk')
+        return Comment.objects.filter(task_id=task_id).order_by('-created_at')
 
     def perform_create(self, serializer):
         task_id = self.kwargs.get('task_pk')
-
         try:
             task = Task.objects.get(id=task_id)
         except Task.DoesNotExist:
@@ -58,14 +74,16 @@ class CommentView(generics.ListCreateAPIView):
             raise NotFound("Task not found.")
 
         user = self.request.user
+        # Only allow users who are members of the board to comment
         if not BoardUser.objects.filter(board=task.column.board, user=user).exists():
             from rest_framework.exceptions import PermissionDenied
             raise PermissionDenied("You are not a member of this board.")
 
-
         serializer.save(task=task, author=user)
 
 
+# Handles retrieving, updating, or deleting a single comment.
+# Only the comment author can update or delete their comment.
 class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
     serializer_class = CommentSerializer
     permission_classes = [IsAuthenticated]
@@ -83,13 +101,14 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
         return comment
 
 
+# -------------------- Auth Views --------------------
 
-
-
-
+# Custom login endpoint.
+# Authenticates user by email + password, returns token and user info.
 class LoginView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+
     def post(self, request):
         email = request.data.get("email")
         password = request.data.get("password")
@@ -97,30 +116,28 @@ class LoginView(APIView):
             user = User.objects.get(email=email)
         except User.DoesNotExist:
             return Response({"error": "Invalid email or password"}, status=400)
-        auth_user = authenticate(username=user.username, password=password)
 
+        auth_user = authenticate(username=user.username, password=password)
         if auth_user is not None:
             token, created = Token.objects.get_or_create(user=auth_user)
             return Response({
                 "token": token.key,
-                "user" : {
+                "user": {
                     "id": auth_user.id,
                     "username": auth_user.username,
                     "fullname": auth_user.username,
                     "email": auth_user.email,
                 }
-
             })
-        else:
-            return Response({"error": "Invalid email or password"}, status=400)
+        return Response({"error": "Invalid email or password"}, status=400)
 
 
-
-
-
+# Handles user registration.
+# On success, returns token and created user info.
 class RegistrationView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
+
     def post(self, request):
         print("REGISTRATION REQUEST:", request.data)
         serializer = RegistrationSerializer(data=request.data)
@@ -134,11 +151,13 @@ class RegistrationView(APIView):
                     "username": user.username,
                     "fullname": user.username,
                     "email": user.email,
-                    }
+                }
             }, status=status.HTTP_201_CREATED)
-        else:
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+
+# Checks whether an email is already registered.
+# Supports both GET (query param) and POST (body).
 User = get_user_model()
 class EmailCheckView(APIView):
     permission_classes = [AllowAny]
@@ -174,10 +193,9 @@ class EmailCheckView(APIView):
         return Response({"email_exists": False})
 
 
+# -------------------- Task Views --------------------
 
-
-
-
+# Returns tasks where the current user is reviewer.
 class TasksReviewerView(generics.ListAPIView):
     serializer_class = TasksSerializer
     permission_classes = [isUserOrReadOnly]
@@ -186,14 +204,13 @@ class TasksReviewerView(generics.ListAPIView):
         return Task.objects.filter(reviewer=self.request.user)
 
 
-
-
-
-
+# Main Task ViewSet.
+# Provides full CRUD (list, create, retrieve, update, delete) for tasks.
+# Only tasks from boards the user is a member of are visible.
 class TaskViewSet(viewsets.ModelViewSet):
     queryset = Task.objects.all()
     serializer_class = TasksSerializer
-    permission_classes = [IsAuthenticated]  # Vereinfacht
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         user = self.request.user
@@ -201,6 +218,9 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Task.objects.filter(column__board__members__user=user)
         return Task.objects.none()
 
+    # Custom create logic:
+    # - Resolves column automatically if "status" and "board" are given.
+    # - Validates assignee and reviewer existence.
     def create(self, request, *args, **kwargs):
         data = request.data.copy()
         status_value = data.get("status")
@@ -241,7 +261,12 @@ class TaskViewSet(viewsets.ModelViewSet):
         return Response(serializer.data, status=201)
 
 
+# -------------------- Board Views --------------------
 
+# Main Board ViewSet.
+# Provides full CRUD for boards.
+# Only returns boards where the user is a member.
+# On creation, automatically creates default columns.
 class BoardViewSet(viewsets.ModelViewSet):
     queryset = Board.objects.all()
     serializer_class = BoardSerializer
@@ -267,16 +292,15 @@ class BoardViewSet(viewsets.ModelViewSet):
                 title=title,
                 position=position
             )
-
         return board
 
 
+# -------------------- Extra Task Views --------------------
 
+# Returns tasks where the current user is assigned.
 class TasksAssignedToMeView(ListAPIView):
     serializer_class = TasksSerializer
     permission_classes = [isUserOrReadOnly]
 
     def get_queryset(self):
-       return Task.objects.filter(assigned_to=self.request.user)
-
-
+        return Task.objects.filter(assigned_to=self.request.user)
