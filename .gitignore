@@ -1,10 +1,10 @@
-# 🐍 Virtuelle Umgebung
+
 env/
 ENV/
 .venv/
 venv/
 
-# 💡 Python Bytecode-Dateien
+
 __pycache__/
 *.py[cod]
 *$py.class
@@ -12,3 +12,5 @@ __pycache__/
 todo.txt
 
 .vscode
+
+db.sqlite3

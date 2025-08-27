@@ -13,7 +13,6 @@ class TasksSerializer(serializers.ModelSerializer):
     assignee = serializers.SerializerMethodField()
     reviewer = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
-    board_id = serializers.SerializerMethodField()
     board = serializers.SerializerMethodField()
 
     # Write-only fields for assigning/reviewer users by ID
@@ -32,12 +31,12 @@ class TasksSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    board_write = serializers.PrimaryKeyRelatedField(
-        queryset=Board.objects.all(),
-        write_only=True,
-        required=False,
-        source='board'
-    )
+    # board_write = serializers.PrimaryKeyRelatedField(
+    #     queryset=Board.objects.all(),
+    #     write_only=True,
+    #     required=False,
+    #     source='board'
+    # )
     # Extra read-only field for column title
     column_title = serializers.CharField(source="column.title", read_only=True)
 
@@ -47,13 +46,10 @@ class TasksSerializer(serializers.ModelSerializer):
             "id", "title", "description", "status", "priority", "due_date",
             "column", "column_title", "board", "assignee", "reviewer",
             "assignee_id", "reviewer_id", "created_at", "updated_at","comments_count",
-            "board_id","board_write"
+            #,"board_write"
         ]
-    # Return board ID via related column
-    def get_board(self, obj):
-        return obj.column.board.id
 
-    def get_board_id(self, obj):
+    def get_board(self, obj):
         return obj.column.board.id
 
     def get_comments_count(self, obj):
@@ -64,7 +60,6 @@ class TasksSerializer(serializers.ModelSerializer):
             return {
                 "id": obj.assigned_to.id,
                 "fullname": obj.assigned_to.get_full_name() or obj.assigned_to.username,
-                "username": obj.assigned_to.username,
                 "email": obj.assigned_to.email
             }
         return None
@@ -74,7 +69,6 @@ class TasksSerializer(serializers.ModelSerializer):
             return {
                 "id": obj.reviewer.id,
                 "fullname": obj.reviewer.get_full_name() or obj.reviewer.username,
-                "username": obj.reviewer.username,
                 "email": obj.reviewer.email
             }
         return None
@@ -149,6 +143,7 @@ class BoardSerializer(serializers.ModelSerializer):
     )
 
     owner = serializers.HiddenField(default=serializers.CurrentUserDefault())
+    owner_id = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     ticket_count = serializers.SerializerMethodField()
     tasks_to_do_count = serializers.SerializerMethodField()
@@ -158,15 +153,25 @@ class BoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Board
         fields = [
-            "id", "title", "created_at", "owner",
+            "id", "title", "created_at", "owner","owner_id",
             "members", "members_input",
             "member_count", "ticket_count",
             "tasks_to_do_count", "tasks_high_prio_count", "tasks",
         ]
 
+    def get_owner_id(self, obj):
+        return obj.owner.id
+
     def get_members(self, obj):
         board_users = BoardUser.objects.filter(board=obj)
-        return BoardUserSerializer(board_users, many=True).data
+        return [
+            {
+                "id": bu.user.id,
+                "email": bu.user.email,
+                "fullname": bu.user.get_full_name() or bu.user.username
+            }
+            for bu in board_users
+        ]
 
     def get_member_count(self, obj):
         return obj.members.count()

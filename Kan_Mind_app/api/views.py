@@ -138,20 +138,17 @@ class RegistrationView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+
     def post(self, request):
-        print("REGISTRATION REQUEST:", request.data)
         serializer = RegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
             token, _ = Token.objects.get_or_create(user=user)
             return Response({
                 "token": token.key,
-                "user": {
-                    "id": user.id,
-                    "username": user.username,
-                    "fullname": user.username,
-                    "email": user.email,
-                }
+                "user_id": user.id,
+                "fullname": user.username,
+                "email": user.email,
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -176,7 +173,7 @@ class EmailCheckView(APIView):
                 "email_exists": True,
                 "id": user.id,
                 "email": user.email,
-                "username": getattr(user, "username", "")
+                "fullname": user.username
             })
         return Response({"email_exists": False})
 
@@ -188,7 +185,7 @@ class EmailCheckView(APIView):
                 "email_exists": True,
                 "id": user.id,
                 "email": user.email,
-                "username": getattr(user, "username", "")
+                "fullname": user.username
             })
         return Response({"email_exists": False})
 
