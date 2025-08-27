@@ -172,28 +172,37 @@ Visit `http://localhost:8000/api/docs/` for interactive API documentation (if co
 ## Project Structure
 
 ```
-kanban-board-api/
-├── kanban_project/
+KANMIND/
+├── .vscode/
+├── env/                          # Virtual environment
+├── kan_Mind_app/
+│   ├── __pycache__/
+│   ├── api/
+│   │   ├── __pycache__/
+│   │   ├── permissions.py
+│   │   ├── serializers.py
+│   │   ├── urls.py
+│   │   └── views.py
+│   ├── migrations/
+│   ├── __init__.py
+│   ├── admin.py
+│   ├── apps.py
+│   ├── models.py
+│   ├── tests.py
+│   └── views.py
+├── KanMind/                      # Main Django project
+│   ├── __pycache__/
+│   ├── __init__.py
+│   ├── asgi.py
 │   ├── settings.py
 │   ├── urls.py
 │   └── wsgi.py
-├── boards/
-│   ├── models.py
-│   ├── views.py
-│   ├── serializers.py
-│   └── urls.py
-├── tasks/
-│   ├── models.py
-│   ├── views.py
-│   └── serializers.py
-├── users/
-│   ├── models.py
-│   ├── views.py
-│   └── serializers.py
-├── requirements.txt
+├── .gitignore
+├── db.sqlite3                    # Database file
+├── desktop.ini
 ├── manage.py
-└── README.md
-```
+├── README.md
+└── requirements.txt
 
 ## Troubleshooting
 
