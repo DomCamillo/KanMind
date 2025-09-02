@@ -22,11 +22,12 @@ from rest_framework import status, viewsets
 from Kan_Mind_app.models import STATUS_CHOICES
 from django.contrib.auth import authenticate, get_user_model
 
+
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import NotAuthenticated
+from rest_framework.exceptions import NotAuthenticated ,NotFound, PermissionDenied
 from rest_framework.authtoken.views import ObtainAuthToken
 from .permissions import (
     isOwnerOrAdmin, isUserOrReadOnly, IsAdminForCrud,
@@ -191,7 +192,7 @@ class TaskViewSet(viewsets.ModelViewSet):
 """-------BOARD VIEWS---------"""
 
 class BoardViewSet(viewsets.ModelViewSet):
-    """Board ViewSet mit verschiedenen Serializers"""
+    """Board ViewSet with Differente Serialzers"""
     queryset = Board.objects.all()
     permission_classes = [IsAuthenticated]
 
@@ -202,12 +203,12 @@ class BoardViewSet(viewsets.ModelViewSet):
         return Board.objects.filter(members__user=user)
 
     def get_serializer_class(self):
-        """Verschiedene Serializer für verschiedene Actions"""
+        """Different Serializers for different actions"""
         if self.action == 'list':
             return BoardListSerializer
         elif self.action == 'retrieve':
             return BoardDetailSerializer
-        else:  # create, update, partial_update
+        else:
             return BoardCreateUpdateSerializer
 
     def perform_create(self, serializer):
@@ -307,14 +308,12 @@ class CommentView(generics.ListCreateAPIView):
         try:
             task = Task.objects.get(id=task_id)
         except Task.DoesNotExist:
-            from rest_framework.exceptions import NotFound
             raise NotFound("Task not found.")
 
         user = self.request.user
         """ Only allow users who are members of the board to comment"""
         if not BoardUser.objects.filter(board=task.column.board, user=user).exists():
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("You are not a member of this board.")
+            raise PermissionDenied("You are not a member of this board!")
 
         serializer.save(task=task, author=user)
 
@@ -332,7 +331,6 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
         comment = super().get_object()
         if self.request.method in ['PUT', 'PATCH', 'DELETE']:
             if comment.author != self.request.user:
-                from rest_framework.exceptions import PermissionDenied
                 raise PermissionDenied("You can only edit/delete your own comments.")
         return comment
 

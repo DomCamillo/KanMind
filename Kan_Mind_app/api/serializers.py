@@ -177,6 +177,7 @@ class BoardDetailSerializer(serializers.ModelSerializer):
         return TasksSerializer(tasks, many=True).data
 
 
+
 class BoardCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for POST/PATCH - members handling"""
     members_input = serializers.PrimaryKeyRelatedField(
