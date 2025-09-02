@@ -4,18 +4,21 @@ from Kan_Mind_app.models import Board, BoardUser, Comment, Task
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
-# -------------------- Task Serializer --------------------
-# Handles all logic related to Task serialization.
-# Includes custom fields for assignee, reviewer, comments count, and board info.
-# Maps BoardUser to User when creating/updating tasks.
+
+
+
+"""-------TASK SERIALIZER---------"""
+
 class TasksSerializer(serializers.ModelSerializer):
-     # Custom read-only fields
+    """ Handles all logic related to Task serialization.
+    Includes custom fields for assignee, reviewer, comments count, and board info.
+    Maps BoardUser to User when creating/updating tasks."""
     assignee = serializers.SerializerMethodField()
     reviewer = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
     board = serializers.SerializerMethodField()
 
-    # Write-only fields for assigning/reviewer users by ID
+    """Write-only fields for assigning/reviewer users by ID"""
     assignee_id = serializers.PrimaryKeyRelatedField(
         queryset=BoardUser.objects.all(),
         source="assigned_to",
@@ -31,13 +34,6 @@ class TasksSerializer(serializers.ModelSerializer):
         required=False,
         allow_null=True
     )
-    # board_write = serializers.PrimaryKeyRelatedField(
-    #     queryset=Board.objects.all(),
-    #     write_only=True,
-    #     required=False,
-    #     source='board'
-    # )
-    # Extra read-only field for column title
     column_title = serializers.CharField(source="column.title", read_only=True)
 
     class Meta:
@@ -46,7 +42,6 @@ class TasksSerializer(serializers.ModelSerializer):
             "id", "title", "description", "status", "priority", "due_date",
             "column", "column_title", "board", "assignee", "reviewer",
             "assignee_id", "reviewer_id", "created_at", "updated_at","comments_count",
-            #,"board_write"
         ]
 
     def get_board(self, obj):
@@ -72,7 +67,8 @@ class TasksSerializer(serializers.ModelSerializer):
                 "email": obj.reviewer.email
             }
         return None
-     # Validation to ensure assignee and reviewer belong to the same board
+
+    """  Validation to ensure assignee and reviewer belong to the same board"""
     def validate(self, data):
         board = data.get('board')
         assigned_to = data.get('assigned_to')
@@ -91,10 +87,10 @@ class TasksSerializer(serializers.ModelSerializer):
                 })
         return data
 
-# Custom create logic:
-# - Assigns task to first column if none is provided
-# - Maps BoardUser objects to actual User before saving
     def create(self, validated_data):
+        """ Custom create logic:
+        - Assigns task to first column if none is provided
+        - Maps BoardUser objects to actual User before saving"""
         board = validated_data.pop("board", None)
         assigned_to = validated_data.pop("assigned_to", None)
         reviewer = validated_data.pop("reviewer", None)
@@ -113,10 +109,17 @@ class TasksSerializer(serializers.ModelSerializer):
         return Task.objects.create(**validated_data)
 
 
-# -------------------- BoardUser Serializer --------------------
-# Handles serialization of board members.
-# Includes extra fields like fullname and email.
+
+
+
+
+
+"""-------BOARD SERIALIZER---------"""
+
 class BoardUserSerializer(serializers.ModelSerializer):
+    """
+    # Handles serialization of board members.
+    # Includes extra fields like fullname and email."""
     fullname = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email', read_only=True)
 
@@ -128,11 +131,10 @@ class BoardUserSerializer(serializers.ModelSerializer):
         return obj.user.get_full_name() or obj.user.username
 
 
-# -------------------- Board Serializer --------------------
-# Handles serialization of boards.
-# Includes members, statistics, and related tasks.
-# Automatically sets owner as current logged-in user when board is createt.
 class BoardSerializer(serializers.ModelSerializer):
+    """# Handles serialization of boards.
+    # Includes members, statistics, and related tasks.
+    # Automatically sets owner as current logged-in user when board is createt."""
     members = BoardUserSerializer(many=True, read_only=True)
     members_input = serializers.PrimaryKeyRelatedField(
         source='members',
@@ -189,17 +191,17 @@ class BoardSerializer(serializers.ModelSerializer):
         tasks = Task.objects.filter(column__board=obj)
         return TasksSerializer(tasks, many=True).data
 
-    # Maps 'members' input → 'members_input' for handling request data
     def to_internal_value(self, data):
+        """ Maps 'members' input → 'members_input' for handling request data"""
         if 'members' in data:
             data = data.copy()
             data['members_input'] = data.pop('members')
         return super().to_internal_value(data)
 
-    # Custom create:
-    # - Creates board and assigns owner
-    # - Adds members as BoardUser instances
+
     def create(self, validated_data):
+        """Creates board and assigns owner
+         Adds members as BoardUser instances"""
         member_users = validated_data.pop('members', [])
         board = Board.objects.create(**validated_data)
 
@@ -213,12 +215,11 @@ class BoardSerializer(serializers.ModelSerializer):
 
 
 
+"""-------COMMENT SERIALIZER---------"""
 
-
-# -------------------- Comment Serializer --------------------
-# Handles serialization of comments.
-# Includes author details and task reference.
 class CommentSerializer(serializers.ModelSerializer):
+    """ Handles serialization of comments.
+     Includes author details and task reference."""
     author = serializers.SerializerMethodField()
     task = serializers.PrimaryKeyRelatedField(read_only=True)
 
@@ -230,10 +231,14 @@ class CommentSerializer(serializers.ModelSerializer):
         return obj.author.get_full_name() or obj.author.username
 
 
-# -------------------- Registration Serializer --------------------
-# Handles user registration.
-# Includes password confirmation and maps fullname → username.
+
+
+
+"""-------REGISTRATION SERIALIZER---------"""
+
 class RegistrationSerializer(serializers.ModelSerializer):
+    """ Handles user registration.
+     Includes password confirmation and maps fullname → username"""
     repeated_password = serializers.CharField(write_only=True)
     fullname = serializers.CharField(write_only=True)
 
@@ -243,13 +248,13 @@ class RegistrationSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'password': {'write_only': True}
         }
-    # Ensure email is unique
+    """  Ensure email is unique"""
     def validate_email(self, value):
         if User.objects.filter(email=value).exists():
             raise serializers.ValidationError('Email already exists')
         return value
 
-    # Ensure both passwords match
+    """ Ensure both passwords match"""
     def validate(self, data):
         if data['password'] != data['repeated_password']:
             raise serializers.ValidationError(
