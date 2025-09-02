@@ -1,6 +1,5 @@
 from rest_framework import generics
 from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
-from .serializers import BoardSerializer ,BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
 from Kan_Mind_app.models import STATUS_CHOICES
@@ -17,7 +16,7 @@ from .permissions import isOwnerOrAdmin, isUserOrReadOnly ,IsAdminForCrud, isAdm
 
 from rest_framework import generics
 from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
-from .serializers import BoardSerializer, BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer
+from .serializers import  BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer, BoardListSerializer, BoardDetailSerializer, BoardCreateUpdateSerializer
 from rest_framework.generics import ListAPIView
 from rest_framework import status, viewsets
 from Kan_Mind_app.models import STATUS_CHOICES
@@ -40,25 +39,23 @@ from .permissions import (
 """-------TASK VIEWS---------"""
 
 class TasksReviewerView(generics.ListAPIView):
-    """ Returns tasks where the current user is reviewer."""
+    """Returns tasks where the current user is reviewer."""
     serializer_class = TasksSerializer
-    permission_classes = [isUserOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Task.objects.filter(reviewer=self.request.user)
 
-class TasksAssignedToMeView(ListAPIView):
-    """ Returns tasks where the current user is assigned."""
+class TasksAssignedToMeView(generics.ListAPIView):
+    """Returns tasks where the current user is assigned."""
     serializer_class = TasksSerializer
-    permission_classes = [isUserOrReadOnly]
+    permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         return Task.objects.filter(assigned_to=self.request.user)
 
 class TaskViewSet(viewsets.ModelViewSet):
-    """ Main Task ViewSet.
-    Provides full CRUD (list, create, retrieve, update, delete) for tasks.
-    Only tasks from boards the user is a member of are visible."""
+    """Main Task ViewSet with full CRUD functionality."""
     queryset = Task.objects.all()
     serializer_class = TasksSerializer
     permission_classes = [IsAuthenticated]
@@ -68,11 +65,9 @@ class TaskViewSet(viewsets.ModelViewSet):
         if user.is_authenticated:
             return Task.objects.filter(column__board__members__user=user)
         return Task.objects.none()
-    """
-    Custom create logic:
-    - Resolves column automatically if "status" and "board" are given.
-    - Validates assignee and reviewer existence."""
+
     def create(self, request, *args, **kwargs):
+        """Custom create logic with automatic column resolution"""
         data = request.data.copy()
         status_value = data.get("status")
         board_id = data.get("board")
@@ -81,15 +76,31 @@ class TaskViewSet(viewsets.ModelViewSet):
 
         if assignee_id:
             try:
-                User.objects.get(id=assignee_id)
+                assignee = User.objects.get(id=assignee_id)
+                if not BoardUser.objects.filter(board_id=board_id, user=assignee).exists():
+                    return Response(
+                        {"error": f"User {assignee.username} is not a member of this board."},
+                        status=400
+                    )
             except User.DoesNotExist:
-                pass
+                return Response(
+                    {"error": "Assignee user does not exist."},
+                    status=400
+                )
 
         if reviewer_id:
             try:
-                User.objects.get(id=reviewer_id)
+                reviewer = User.objects.get(id=reviewer_id)
+                if not BoardUser.objects.filter(board_id=board_id, user=reviewer).exists():
+                    return Response(
+                        {"error": f"User {reviewer.username} is not a member of this board."},
+                        status=400
+                    )
             except User.DoesNotExist:
-                pass
+                return Response(
+                    {"error": "Reviewer user does not exist."},
+                    status=400
+                )
 
         if status_value and board_id and not data.get("column"):
             try:
@@ -109,8 +120,68 @@ class TaskViewSet(viewsets.ModelViewSet):
             return Response(serializer.errors, status=400)
 
         self.perform_create(serializer)
-        return Response(serializer.data, status=201)
 
+        response_data = {
+            "id": serializer.instance.id,
+            "board": serializer.instance.column.board.id,
+            "title": serializer.instance.title,
+            "description": serializer.instance.description,
+            "status": serializer.instance.status,
+            "priority": serializer.instance.priority,
+            "assignee": self._get_user_data(serializer.instance.assigned_to),
+            "reviewer": self._get_user_data(serializer.instance.reviewer),
+            "due_date": serializer.instance.due_date,
+            "comments_count": serializer.instance.comments.count()
+        }
+        return Response(response_data, status=201)
+
+    def update(self, request, *args, **kwargs):
+        """Custom update logic"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+
+        data = request.data.copy()
+        status_value = data.get("status")
+
+        if status_value and status_value != instance.status:
+            try:
+                column = Column.objects.get(
+                    board=instance.column.board,
+                    title__iexact=status_value
+                )
+                data["column"] = column.id
+            except Column.DoesNotExist:
+                return Response(
+                    {"error": f"No column found for status '{status_value}' in this board."},
+                    status=400
+                )
+        serializer = self.get_serializer(instance, data=data, partial=partial)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=400)
+
+        self.perform_update(serializer)
+        response_data = {
+            "id": serializer.instance.id,
+            "title": serializer.instance.title,
+            "description": serializer.instance.description,
+            "status": serializer.instance.status,
+            "priority": serializer.instance.priority,
+            "assignee": self._get_user_data(serializer.instance.assigned_to),
+            "reviewer": self._get_user_data(serializer.instance.reviewer),
+            "due_date": serializer.instance.due_date
+        }
+
+        return Response(response_data)
+
+    def _get_user_data(self, user):
+        """Helper method to format user data"""
+        if user:
+            return {
+                "id": user.id,
+                "email": user.email,
+                "fullname": user.get_full_name() or user.username
+            }
+        return None
 
 
 
@@ -120,12 +191,8 @@ class TaskViewSet(viewsets.ModelViewSet):
 """-------BOARD VIEWS---------"""
 
 class BoardViewSet(viewsets.ModelViewSet):
-    """ Main Board ViewSet.
-    Provides full CRUD for boards.
-    Only returns boards where the user is a member.
-    On creation, automatically creates default columns."""
+    """Board ViewSet mit verschiedenen Serializers"""
     queryset = Board.objects.all()
-    serializer_class = BoardSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
@@ -133,6 +200,15 @@ class BoardViewSet(viewsets.ModelViewSet):
         if user.is_anonymous:
             raise NotAuthenticated("You are not logged in")
         return Board.objects.filter(members__user=user)
+
+    def get_serializer_class(self):
+        """Verschiedene Serializer für verschiedene Actions"""
+        if self.action == 'list':
+            return BoardListSerializer
+        elif self.action == 'retrieve':
+            return BoardDetailSerializer
+        else:  # create, update, partial_update
+            return BoardCreateUpdateSerializer
 
     def perform_create(self, serializer):
         board = serializer.save(owner=self.request.user)
@@ -149,6 +225,51 @@ class BoardViewSet(viewsets.ModelViewSet):
                 position=position
             )
         return board
+
+    def create(self, request, *args, **kwargs):
+        """Override create to return correct POST response format"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        board = self.perform_create(serializer)
+        response_data = {
+            "id": board.id,
+            "title": board.title,
+            "member_count": board.members.count(),
+            "ticket_count": Task.objects.filter(column__board=board).count(),
+            "tasks_to_do_count": Task.objects.filter(column__board=board, status="to-do").count(),
+            "tasks_high_prio_count": Task.objects.filter(column__board=board, priority="high").count(),
+            "owner_id": board.owner.id
+        }
+        return Response(response_data, status=status.HTTP_201_CREATED)
+
+    def update(self, request, *args, **kwargs):
+        """Override update to return correct PATCH response format"""
+        partial = kwargs.pop('partial', False)
+        instance = self.get_object()
+        serializer = self.get_serializer(instance, data=request.data, partial=partial)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+
+        board_users = BoardUser.objects.filter(board=instance)
+        response_data = {
+            "id": instance.id,
+            "title": instance.title,
+            "owner_data": {
+                "id": instance.owner.id,
+                "email": instance.owner.email,
+                "fullname": instance.owner.get_full_name() or instance.owner.username
+            },
+            "members_data": [
+                {
+                    "id": bu.user.id,
+                    "email": bu.user.email,
+                    "fullname": bu.user.get_full_name() or bu.user.username
+                }
+                for bu in board_users
+            ]
+        }
+
+        return Response(response_data)
 
 
 class BoardUserView(generics.ListCreateAPIView):
@@ -240,13 +361,11 @@ class LoginView(APIView):
             token, created = Token.objects.get_or_create(user=auth_user)
             return Response({
                 "token": token.key,
-                "fullname": auth_user.username,
+                "fullname": auth_user.username,  # oder auth_user.get_full_name() falls verfügbar
                 "email": auth_user.email,
                 "user_id": auth_user.id,
-
-            })
+            }, status=200)
         return Response({"error": "Invalid email or password"}, status=400)
-
 
 class RegistrationView(APIView):
     """ Handles user registration.
