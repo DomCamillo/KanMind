@@ -12,7 +12,7 @@ from rest_framework.permissions import AllowAny ,IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import NotAuthenticated
 from rest_framework.authtoken.views import ObtainAuthToken
-from .permissions import isOwnerOrAdmin, isUserOrReadOnly ,IsAdminForCrud, isAdminOnly, isBoardUser ,isBaordAdmin, isCommentAuthorOrAdmin
+
 
 from rest_framework import generics
 from Kan_Mind_app.models import Column, Task, Comment, Board, BoardUser
@@ -29,10 +29,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
 from rest_framework.exceptions import NotAuthenticated ,NotFound, PermissionDenied
 from rest_framework.authtoken.views import ObtainAuthToken
-from .permissions import (
-    isOwnerOrAdmin, isUserOrReadOnly, IsAdminForCrud,
-    isAdminOnly, isBoardUser, isBaordAdmin, isCommentAuthorOrAdmin
-)
+from .permissions import IsActiveUser
+
 
 
 
@@ -121,9 +119,7 @@ class TaskViewSet(viewsets.ModelViewSet):
         serializer = self.get_serializer(data=data)
         if not serializer.is_valid():
             return Response(serializer.errors, status=400)
-
         self.perform_create(serializer)
-
         response_data = {
             "id": serializer.instance.id,
             "board": serializer.instance.column.board.id,
@@ -196,11 +192,11 @@ class TaskViewSet(viewsets.ModelViewSet):
 class BoardViewSet(viewsets.ModelViewSet):
     """Board ViewSet with Differente Serialzers"""
     queryset = Board.objects.all()
-    permission_classes = [IsAuthenticated]
+    permission_classes = [IsActiveUser]
 
     def get_queryset(self):
         user = self.request.user
-        if user.is_anonymous:
+        if user.is_anonymous or not user.is_active:
             raise NotAuthenticated("You are not logged in")
         return Board.objects.filter(members__user=user)
 
@@ -214,6 +210,11 @@ class BoardViewSet(viewsets.ModelViewSet):
             return BoardCreateUpdateSerializer
 
     def perform_create(self, serializer):
+        """double check, so no deleted user can create a board"""
+        user = self.request.user
+        if not user.is_authenticated or not user.is_active:
+            raise PermissionDenied("Active authentication required")
+
         board = serializer.save(owner=self.request.user)
         default_columns = [
             ('to-do', 0),
@@ -272,7 +273,7 @@ class BoardViewSet(viewsets.ModelViewSet):
             ]
         }
 
-        return Response(response_data)
+        return Response(response_data, status=status.HTTP_200_OK)
 
 
 class BoardUserView(generics.ListCreateAPIView):

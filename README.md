@@ -136,17 +136,6 @@ coverage run --source='.' manage.py test
 coverage report
 ```
 
-#### Code Formatting
-```bash
-# Install development dependencies
-pip install black flake8
-
-# Format code
-black .
-
-# Check code style
-flake8 .
-```
 
 ## API Endpoints
 
@@ -190,7 +179,7 @@ KANMIND/
 │   ├── models.py
 │   ├── tests.py
 │   └── views.py
-├── KanMind/                      # Main Django project
+├── core/                      # Main Django project
 │   ├── __pycache__/
 │   ├── __init__.py
 │   ├── asgi.py

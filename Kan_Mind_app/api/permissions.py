@@ -24,11 +24,14 @@ class isOwnerOrAdmin(BasePermission):
         return obj.author == request.user or request.user.is_superuser
 
 
-class isAdminOnly(BasePermission):
-    def has_permission(self,request, view):
-        if request.user.is_superuser :
-            return True
-        return False
+class IsActiveUser(BasePermission):
+    """Custom permission to only allow active users"""
+    def has_permission(self, request, view):
+        return (
+            request.user.is_authenticated and
+            request.user.is_active and
+            not request.user.is_anonymous
+        )
 
 
 class isBoardUser(BasePermission):
