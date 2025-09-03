@@ -59,7 +59,7 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:5500",
 ]
 
-ROOT_URLCONF = 'KanMind.urls'
+ROOT_URLCONF = 'core.urls'
 
 TEMPLATES = [
     {
@@ -76,7 +76,7 @@ TEMPLATES = [
     },
 ]
 
-WSGI_APPLICATION = 'KanMind.wsgi.application'
+WSGI_APPLICATION = 'core.wsgi.application'
 
 
 
