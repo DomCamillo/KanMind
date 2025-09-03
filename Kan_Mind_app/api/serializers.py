@@ -102,9 +102,7 @@ class TasksSerializer(serializers.ModelSerializer):
 """-------BOARD SERIALIZER---------"""
 
 class BoardUserSerializer(serializers.ModelSerializer):
-    """
-    # Handles serialization of board members.
-    # Includes extra fields like fullname and email."""
+    """Handles serialization of board members."""
     fullname = serializers.SerializerMethodField()
     email = serializers.EmailField(source='user.email', read_only=True)
 
@@ -239,7 +237,8 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
         return Task.objects.filter(column__board=obj, priority="high").count()
 
     def to_internal_value(self, data):
-        """Maps 'members' input > 'members_input'"""
+        """Maps 'members' input > 'members_input'
+        makes a dict from the raw input data"""
         if 'members' in data:
             data = data.copy()
             data['members_input'] = data.pop('members')
@@ -272,10 +271,7 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
 
             for user in member_users:
                 if user != instance.owner:
-                    BoardUser.objects.get_or_create(
-                        user=user, board=instance, defaults={'role': 'member'}
-                    )
-
+                    BoardUser.objects.get_or_create(user=user, board=instance, defaults={'role': 'member'})
         return instance
 
 

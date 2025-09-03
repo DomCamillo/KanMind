@@ -47,6 +47,7 @@ class TasksReviewerView(generics.ListAPIView):
     def get_queryset(self):
         return Task.objects.filter(reviewer=self.request.user)
 
+
 class TasksAssignedToMeView(generics.ListAPIView):
     """Returns tasks where the current user is assigned."""
     serializer_class = TasksSerializer
@@ -54,6 +55,7 @@ class TasksAssignedToMeView(generics.ListAPIView):
 
     def get_queryset(self):
         return Task.objects.filter(assigned_to=self.request.user)
+
 
 class TaskViewSet(viewsets.ModelViewSet):
     """Main Task ViewSet with full CRUD functionality."""
@@ -325,7 +327,7 @@ class CommentDetailView(generics.RetrieveUpdateDestroyAPIView):
 
     def get_queryset(self):
         task_id = self.kwargs.get('task_pk')
-        return Comment.objects.filter(task_id=task_id)
+        return Comment.objects.filter(task_id=task_id).select_related('author').order_by('-created_at')
 
     def get_object(self):
         comment = super().get_object()
@@ -359,7 +361,7 @@ class LoginView(APIView):
             token, created = Token.objects.get_or_create(user=auth_user)
             return Response({
                 "token": token.key,
-                "fullname": auth_user.username,  # oder auth_user.get_full_name() falls verfügbar
+                "fullname": auth_user.username,
                 "email": auth_user.email,
                 "user_id": auth_user.id,
             }, status=200)
