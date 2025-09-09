@@ -1,6 +1,5 @@
 from rest_framework import serializers
-from Kan_Mind_app.models import Board, BoardUser, Comment, Task
-# from django.contrib.auth.models import User
+from Kan_Mind_app.models import Board, BoardUser, Comment, Task, Column
 from django.contrib.auth import get_user_model
 User = get_user_model()
 
@@ -15,6 +14,12 @@ class TasksSerializer(serializers.ModelSerializer):
     reviewer = serializers.SerializerMethodField()
     comments_count = serializers.SerializerMethodField()
     board = serializers.SerializerMethodField()
+
+    column = serializers.PrimaryKeyRelatedField(
+        queryset=Column.objects.all(),
+        write_only=True,
+        required=False
+    )
 
     assignee_id = serializers.PrimaryKeyRelatedField(
         queryset=User.objects.filter(is_active=True),
@@ -37,7 +42,7 @@ class TasksSerializer(serializers.ModelSerializer):
         fields = [
             "id", "board", "title", "description", "status", "priority",
             "assignee", "reviewer", "assignee_id", "reviewer_id",
-            "due_date", "comments_count"
+            "due_date", "comments_count", "column"
         ]
 
     def get_board(self, obj):
@@ -65,28 +70,20 @@ class TasksSerializer(serializers.ModelSerializer):
         return None
 
     def validate(self, data):
-        """FIXED: Validation to ensure assignee and reviewer belong to the board"""
-        # Board ermitteln - aus verschiedenen Quellen
+        """Validation to ensure assignee and reviewer belong to the board"""
         board = None
 
-        # 1. Aus column (bei Create mit column)
         column = data.get('column')
         if column:
             board = column.board
-
-        # 2. Aus bestehender Instanz (bei Update)
-        elif hasattr(self, 'instance') and self.instance:
+        elif hasattr(self, 'instance') and self.instance and self.instance.column:
             board = self.instance.column.board
-
-        # 3. Aus View Context (falls column_id über URL Parameter kommt)
         elif hasattr(self, 'context') and 'board' in self.context:
             board = self.context['board']
 
         if not board:
-            # Wenn kein Board gefunden, Skip Validation (wird später in View gehandhabt)
             return data
 
-        # Assignee Validation
         assigned_to = data.get('assigned_to')
         if assigned_to:
             if not BoardUser.objects.filter(board=board, user=assigned_to).exists():
@@ -94,7 +91,6 @@ class TasksSerializer(serializers.ModelSerializer):
                     'assignee_id': f'User {assigned_to.username} is not a member of this board.'
                 })
 
-        # Reviewer Validation
         reviewer = data.get('reviewer')
         if reviewer:
             if not BoardUser.objects.filter(board=board, user=reviewer).exists():
@@ -103,12 +99,6 @@ class TasksSerializer(serializers.ModelSerializer):
                 })
 
         return data
-
-    def create(self, validated_data):
-        """Custom create logic for tasks"""
-        return Task.objects.create(**validated_data)
-
-
 
 
 
@@ -193,8 +183,6 @@ class BoardDetailSerializer(serializers.ModelSerializer):
 
 class BoardCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for POST/PATCH - members handling - FIXED VERSION"""
-
-    # LÖSUNG: Eigenes Feld für members, nicht Board.members überschreiben
     members_input = serializers.ListField(
         child=serializers.IntegerField(),
         write_only=True,
@@ -202,7 +190,6 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
         help_text="List of user IDs to add as members"
     )
 
-    # Ausgabefelder bleiben gleich
     owner_data = serializers.SerializerMethodField()
     members_data = serializers.SerializerMethodField()
     owner_id = serializers.SerializerMethodField()
@@ -242,7 +229,7 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def get_member_count(self, obj):
-        return BoardUser.objects.filter(board=obj).count()  # Direkter Count
+        return BoardUser.objects.filter(board=obj).count()
 
     def get_ticket_count(self, obj):
         return Task.objects.filter(column__board=obj).count()
@@ -276,21 +263,16 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         """Creates board and assigns members - FIXED"""
         member_user_ids = validated_data.pop('members_input', [])
-
-        # Board erstellen (ohne members zu überschreiben)
         board = Board.objects.create(**validated_data)
-
-        # Owner als BoardUser erstellen
         BoardUser.objects.create(user=board.owner, board=board, role="owner")
 
-        # Members als BoardUser erstellen
         for user_id in member_user_ids:
-            if user_id != board.owner.id:  # Owner nicht doppelt hinzufügen
+            if user_id != board.owner.id:
                 try:
                     user = User.objects.get(id=user_id, is_active=True)
                     BoardUser.objects.create(user=user, board=board, role="member")
                 except User.DoesNotExist:
-                    continue  # Skip invalid users
+                    continue
 
         return board
 
@@ -298,19 +280,15 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
         """Updates board and replaces members - FIXED"""
         member_user_ids = validated_data.pop('members_input', None)
 
-        # Board Felder updaten
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
 
-        # Members updaten falls angegeben
         if member_user_ids is not None:
-            # Nur Member-Rollen löschen, Owner behalten
             BoardUser.objects.filter(board=instance, role="member").delete()
 
-            # Neue Members hinzufügen
             for user_id in member_user_ids:
-                if user_id != instance.owner.id:  # Owner nicht als Member hinzufügen
+                if user_id != instance.owner.id:
                     try:
                         user = User.objects.get(id=user_id, is_active=True)
                         BoardUser.objects.get_or_create(
@@ -319,109 +297,11 @@ class BoardCreateUpdateSerializer(serializers.ModelSerializer):
                             defaults={'role': 'member'}
                         )
                     except User.DoesNotExist:
-                        continue  # Skip invalid users
-
+                        continue
         return instance
 
 
 
-# class BoardCreateUpdateSerializer(serializers.ModelSerializer):
-#     """Serializer for POST/PATCH - members handling"""
-#     members_input = serializers.PrimaryKeyRelatedField(
-#         source='members',
-#         many=True,
-#         queryset=User.objects.all(),
-#         write_only=True,
-#         required=False
-#     )
-#     owner_data = serializers.SerializerMethodField()
-#     members_data = serializers.SerializerMethodField()
-
-#     owner_id = serializers.SerializerMethodField()
-#     member_count = serializers.SerializerMethodField()
-#     ticket_count = serializers.SerializerMethodField()
-#     tasks_to_do_count = serializers.SerializerMethodField()
-#     tasks_high_prio_count = serializers.SerializerMethodField()
-
-#     class Meta:
-#         model = Board
-#         fields = [
-#             "id", "title", "members_input",
-#             "owner_id", "member_count", "ticket_count",
-#             "tasks_to_do_count", "tasks_high_prio_count",
-#             "owner_data", "members_data"
-#         ]
-
-#     def get_owner_id(self, obj):
-#         return obj.owner.id
-
-#     def get_owner_data(self, obj):
-#         return {
-#             "id": obj.owner.id,
-#             "email": obj.owner.email,
-#             "fullname": obj.owner.get_full_name() or obj.owner.username
-#         }
-
-#     def get_members_data(self, obj):
-#         board_users = BoardUser.objects.filter(board=obj)
-#         return [
-#             {
-#                 "id": bu.user.id,
-#                 "email": bu.user.email,
-#                 "fullname": bu.user.get_full_name() or bu.user.username
-#             }
-#             for bu in board_users
-#         ]
-
-#     def get_member_count(self, obj):
-#         return obj.members.count()
-
-#     def get_ticket_count(self, obj):
-#         return Task.objects.filter(column__board=obj).count()
-
-#     def get_tasks_to_do_count(self, obj):
-#         return Task.objects.filter(column__board=obj, status="to-do").count()
-
-#     def get_tasks_high_prio_count(self, obj):
-#         return Task.objects.filter(column__board=obj, priority="high").count()
-
-#     def to_internal_value(self, data):
-#         """Maps 'members' input > 'members_input'
-#         makes a dict from the raw input data"""
-#         if 'members' in data:
-#             data = data.copy()
-#             data['members_input'] = data.pop('members')
-#         return super().to_internal_value(data)
-
-#     def create(self, validated_data):
-#         """Creates board and assigns members"""
-#         member_users = validated_data.pop('members', [])
-#         board = Board.objects.create(**validated_data)
-
-#         BoardUser.objects.create(user=board.owner, board=board, role="owner")
-
-#         for user in member_users:
-#             if user != board.owner:
-#                 BoardUser.objects.create(user=user, board=board, role="member")
-
-#         return board
-
-#     def update(self, instance, validated_data):
-#         """Updates board and replaces members"""
-#         member_users = validated_data.pop('members', None)
-
-#         for attr, value in validated_data.items():
-#             setattr(instance, attr, value)
-#         instance.save()
-
-
-#         if member_users is not None:
-#             BoardUser.objects.filter(board=instance).exclude(role="owner").delete()
-
-#             for user in member_users:
-#                 if user != instance.owner:
-#                     BoardUser.objects.get_or_create(user=user, board=instance, defaults={'role': 'member'})
-#         return instance
 
 
 
