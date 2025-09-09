@@ -34,7 +34,7 @@ urlpatterns = [
     path('tasks/assigned-to-me/', TasksAssignedToMeView.as_view(), name='tasks-assigned'),
     path('tasks/reviewing/', TasksReviewerView.as_view(), name='tasks-reviewer'),
 
-    # """ Task Comments (spezifische URLs vor Router)"""
+    # """ Task Comments"""
     path('tasks/<int:task_pk>/comments/', CommentView.as_view(), name='task-comments'),
     path('tasks/<int:task_pk>/comments/<int:pk>/', CommentDetailView.as_view(), name='task-comment-detail'),
 
