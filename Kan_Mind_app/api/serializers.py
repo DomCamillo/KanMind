@@ -21,17 +21,13 @@ class TasksSerializer(serializers.ModelSerializer):
         required=False
     )
 
-    assignee_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(is_active=True),
-        source="assigned_to",
+    assignee_id = serializers.IntegerField(
         write_only=True,
         required=False,
         allow_null=True
     )
 
-    reviewer_id = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.filter(is_active=True),
-        source="reviewer",
+    reviewer_id = serializers.IntegerField(
         write_only=True,
         required=False,
         allow_null=True
@@ -69,10 +65,39 @@ class TasksSerializer(serializers.ModelSerializer):
             }
         return None
 
+    def validate_assignee_id(self, value):
+        """Validate assignee_id field"""
+        if value is None:
+            return None
+        if not isinstance(value, int):
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("assignee_id must be a valid integer.")
+        try:
+            user = User.objects.get(id=value, is_active=True)
+            return user
+        except User.DoesNotExist:
+            raise serializers.ValidationError(f"User with ID {value} does not exist or is inactive.")
+
+    def validate_reviewer_id(self, value):
+        """Validate reviewer_id field"""
+        if value is None:
+            return None
+        if not isinstance(value, int):
+            try:
+                value = int(value)
+            except (ValueError, TypeError):
+                raise serializers.ValidationError("reviewer_id must be a valid integer.")
+        try:
+            user = User.objects.get(id=value, is_active=True)
+            return user
+        except User.DoesNotExist:
+            raise serializers.ValidationError(f"User with ID {value} does not exist or is inactive.")
+
     def validate(self, data):
         """Validation to ensure assignee and reviewer belong to the board"""
         board = None
-
         column = data.get('column')
         if column:
             board = column.board
@@ -83,20 +108,23 @@ class TasksSerializer(serializers.ModelSerializer):
 
         if not board:
             return data
-
-        assigned_to = data.get('assigned_to')
+        assigned_to = data.get('assignee_id')
         if assigned_to:
             if not BoardUser.objects.filter(board=board, user=assigned_to).exists():
                 raise serializers.ValidationError({
                     'assignee_id': f'User {assigned_to.username} is not a member of this board.'
                 })
+            data['assigned_to'] = assigned_to
 
-        reviewer = data.get('reviewer')
+        reviewer = data.get('reviewer_id')
         if reviewer:
             if not BoardUser.objects.filter(board=board, user=reviewer).exists():
                 raise serializers.ValidationError({
                     'reviewer_id': f'User {reviewer.username} is not a member of this board.'
                 })
+            data['reviewer'] = reviewer
+        data.pop('assignee_id', None)
+        data.pop('reviewer_id', None)
 
         return data
 

@@ -3,13 +3,15 @@ from .permissions import IsActiveUser
 from .serializers import  BoardUserSerializer, TasksSerializer, CommentSerializer, RegistrationSerializer, BoardListSerializer, BoardDetailSerializer, BoardCreateUpdateSerializer
 from django.contrib.auth import authenticate, get_user_model
 
+from django.http import Http404
 from rest_framework import generics
 from rest_framework import status, viewsets
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
-from rest_framework.exceptions import NotAuthenticated ,NotFound, PermissionDenied
+from rest_framework.exceptions import NotAuthenticated ,NotFound, PermissionDenied ,ValidationError
+from rest_framework import serializers
 
 
 
@@ -42,6 +44,22 @@ class TaskViewSet(viewsets.ModelViewSet):
     serializer_class = TasksSerializer
     permission_classes = [IsAuthenticated]
 
+    def get_object(self):
+        """Override to return 403 instead of 404 for permission issues"""
+        try:
+            obj = Task.objects.get(pk=self.kwargs['pk'])
+            if not BoardUser.objects.filter(board=obj.column.board, user=self.request.user).exists():
+                raise PermissionDenied("You don't have access to tasks in this board.")
+            return obj
+        except Task.DoesNotExist:
+            raise Http404("Task not found.")
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.is_authenticated:
+            return Task.objects.filter(column__board__members__user=user)
+        return Task.objects.none()
+
     def _get_status_key_from_display(self, status_input):
         """Convert User-Input to correct Status-Key"""
         if not status_input:
@@ -56,88 +74,52 @@ class TaskViewSet(viewsets.ModelViewSet):
                 return key
         return None
 
-    def _validate_user_membership(self, user_id, board_id, field_name):
-        """validate if user is member of the board"""
-        if not user_id:
-            return None
-        try:
-            user = User.objects.get(id=user_id)
-            if not BoardUser.objects.filter(board_id=board_id, user=user).exists():
-                return Response(
-                    {"error": f"User {user.username} is not a member of this board."},
-                    status=status.HTTP_400_BAD_REQUEST)
-            return None
-        except User.DoesNotExist:
-            return Response(
-                {"error": f"{field_name} user does not exist."},
-                status=status.HTTP_400_BAD_REQUEST)
-
-    def _handle_status_column_mapping(self, data, board_id=None, board=None):
-        """maps status to column"""
+    def _handle_status_column_mapping(self, data, board):
+        """Maps status to column and validates"""
         status_value = data.get("status")
         if not status_value or data.get("column"):
-            return None
+            return
 
         valid_status_key = self._get_status_key_from_display(status_value)
         if not valid_status_key:
-            return Response(
-                {
-                    "error": f"Invalid status '{status_value}'.",
-                    "valid_statuses": [key for key, _ in STATUS_CHOICES]
-                },
-                status=status.HTTP_400_BAD_REQUEST)
+            raise serializers.ValidationError({
+                "status": f"Invalid status '{status_value}'. Valid options: {[key for key, _ in STATUS_CHOICES]}"
+            })
+
         data["status"] = valid_status_key
 
         try:
-            column_filter = {"title": valid_status_key}
-            if board_id:
-                column_filter["board_id"] = board_id
-            elif board:
-                column_filter["board"] = board
-
-            column = Column.objects.get(**column_filter)
+            column = Column.objects.get(title=valid_status_key, board=board)
             data["column"] = column.id
-            return None
         except Column.DoesNotExist:
-            return Response(
-                {"error": f"No column found for status '{valid_status_key}' in this board."},
-                status=status.HTTP_400_BAD_REQUEST)
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated:
-            return Task.objects.filter(column__board__members__user=user)
-        return Task.objects.none()
+            raise serializers.ValidationError({
+                "status": f"No column found for status '{valid_status_key}' in this board."
+            })
 
     def create(self, request, *args, **kwargs):
-        """Custom create logic"""
+        """Custom create logic with board validation"""
         data = request.data.copy()
         board_id = data.get("board")
+        if not board_id:
+            return Response(
+                {"error": "Board ID is required."},
+                status=status.HTTP_400_BAD_REQUEST)
 
-        """Baord Validation"""
-        if board_id:
-            try:
-                board = Board.objects.get(id=board_id)
-                if not BoardUser.objects.filter(board=board, user=request.user).exists():
-                    return Response(
-                        {"error": "You don't have access to this board."},
-                        status=status.HTTP_403_FORBIDDEN)
-            except Board.DoesNotExist:
+        try:
+            board = Board.objects.get(id=board_id)
+            if not BoardUser.objects.filter(board=board, user=request.user).exists():
                 return Response(
-                    {"error": "Board not found."},
-                    status=status.HTTP_404_NOT_FOUND)
-
-        for user_field, field_name in [("assignee_id", "Assignee"), ("reviewer_id", "Reviewer")]:
-            error_response = self._validate_user_membership(data.get(user_field), board_id, field_name)
-            if error_response:
-                return error_response
-
-        """Status/Column mapping"""
-        error_response = self._handle_status_column_mapping(data, board_id=board_id)
-        if error_response:
-            return error_response
-
-        serializer = self.get_serializer(data=data)
+                    {"error": "You don't have access to this board."},
+                    status=status.HTTP_403_FORBIDDEN)
+        except Board.DoesNotExist:
+            return Response(
+                {"error": "Board not found."},
+                status=status.HTTP_404_NOT_FOUND)
+        try:
+            self._handle_status_column_mapping(data, board)
+        except serializers.ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(data=data, context={'board': board})
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
@@ -151,21 +133,21 @@ class TaskViewSet(viewsets.ModelViewSet):
         data = request.data.copy()
 
         if data.get("status") and data["status"] != instance.status:
-            error_response = self._handle_status_column_mapping(data, board=instance.column.board)
-            if error_response:
-                return error_response
-
-        serializer = self.get_serializer(instance, data=data, partial=partial)
+            try:
+                self._handle_status_column_mapping(data, instance.column.board)
+            except serializers.ValidationError as e:
+                return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        serializer = self.get_serializer(
+            instance,
+            data=data,
+            partial=partial,
+            context={'board': instance.column.board}
+        )
         if not serializer.is_valid():
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
         self.perform_update(serializer)
         return Response(self._get_task_response_data(serializer.instance, include_comments_count=False))
-
-    def destroy(self, request, *args, **kwargs):
-        instance = self.get_object()
-        self.perform_destroy(instance)
-        return Response(status=status.HTTP_204_NO_CONTENT)
 
     def _get_task_response_data(self, task_instance, include_comments_count=True):
         """Helper for consistent Response-Data"""
@@ -177,7 +159,8 @@ class TaskViewSet(viewsets.ModelViewSet):
             "priority": task_instance.priority,
             "assignee": self._get_user_data(task_instance.assigned_to),
             "reviewer": self._get_user_data(task_instance.reviewer),
-            "due_date": task_instance.due_date}
+            "due_date": task_instance.due_date
+        }
 
         if include_comments_count:
             data.update({
@@ -214,6 +197,16 @@ class BoardViewSet(viewsets.ModelViewSet):
             raise NotAuthenticated("You are not logged in")
         return Board.objects.filter(members__user=user)
 
+    def get_object(self):
+        """Return 403 instead of 404 for permission issues"""
+        try:
+            obj = Board.objects.get(pk=self.kwargs['pk'])
+            if not BoardUser.objects.filter(board=obj, user=self.request.user).exists():
+                raise PermissionDenied("You don't have access to this board.")
+            return obj
+        except Board.DoesNotExist:
+            raise Http404("Board not found.")
+
     def get_serializer_class(self):
         """Different Serializers for different actions"""
         if self.action == 'list':
@@ -224,7 +217,7 @@ class BoardViewSet(viewsets.ModelViewSet):
             return BoardCreateUpdateSerializer
 
     def perform_create(self, serializer):
-        """double check, so no deleted user can create a board"""
+        """Double check, so no deleted user can create a board"""
         user = self.request.user
         if not user.is_authenticated or not user.is_active:
             raise PermissionDenied("Active authentication required")
