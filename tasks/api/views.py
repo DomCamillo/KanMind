@@ -1,14 +1,11 @@
 
 from tasks.models import Comment, Task, STATUS_CHOICES
 from boards.models import Column ,Board, BoardUser
-from authentication.api.permissions import IsActiveUser
 from .serializers import   TasksSerializer, CommentSerializer
-
 
 from django.http import Http404
 from rest_framework import generics
 from rest_framework import status, viewsets
-from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.authtoken.models import Token
@@ -18,7 +15,6 @@ from rest_framework import serializers
 
 
 """-------TASK VIEWS---------"""
-
 class TasksReviewerView(generics.ListAPIView):
     """Returns tasks where the current user is reviewer."""
     serializer_class = TasksSerializer
