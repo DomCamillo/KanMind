@@ -36,7 +36,10 @@ INSTALLED_APPS = [
     'django.contrib.messages',
     'django.contrib.staticfiles',
     'corsheaders',
-    'Kan_Mind_app',
+    #'Kan_Mind_app',
+    'boards',
+    'tasks',
+    'authentication',
     'rest_framework',
     'rest_framework.authtoken',
 
