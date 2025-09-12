@@ -7,7 +7,6 @@ from .views import (
 """
 Purpose: Customizes DRF’s SimpleRouter to make the trailing slash optional.
 A problem happened because DRF’s default SimpleRouter requires a trailing slash"""
-
 class OptionalSlashRouter(SimpleRouter):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -19,7 +18,7 @@ router.register(r'tasks', TaskViewSet, basename='task')
 
 urlpatterns = [
 
-    # """Tasks"""
+    #"""Tasks"""
     path('tasks/assigned-to-me/', TasksAssignedToMeView.as_view(), name='tasks-assigned'),
     path('tasks/reviewing/', TasksReviewerView.as_view(), name='tasks-reviewer'),
 
